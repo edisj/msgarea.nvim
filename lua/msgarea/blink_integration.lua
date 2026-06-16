@@ -21,7 +21,7 @@ local update_position = function()
   end
 
   local cmd_win = ui2.wins.cmd
-  local height = require("blink.cmp.config").completion.menu.max_height
+  local height = vim.o.pumheight
   height = math.max(height, msgarea.height())
   redraw_cmdheight(height)
   menu.win:set_win_config({
