@@ -53,6 +53,12 @@ vim.g.msgarea_min_height = 3
 -- if you use blink.cmp and want to have cmdline completions render in msgarea
 require("msgarea.blink_integration").enable()
 -- require("msgarea.blink_integration").disable()  -- can be disabled at any time
+
+-- set a keymap to collapse the msgarea
+vim.keymap.set("n", "<M-n>", function() require("msgarea").close_all() end)
+-- two other api functions are available:
+-- require("msgarea").hide()   hide (but do not close) all windows and collapse cmdheight 
+-- require("msgarea").show()   reveal all windows and expand cmdheight 
 ```
 
 ## Usage
@@ -89,12 +95,20 @@ require("vim._core.ui2").enable({
 
 or sometime after you've enabled it:
 ```lua
--- assuming you already called require("vim._core.ui2").enable({ ... })" in your config
+-- assuming you already called require("vim._core.ui2").enable({ ... }) in your config
 local targets = require("vim._core.ui2").cfg.msg.targets
-targets.list_cmd = "msgarea"
-targets.lua_print = "msgarea"
-targets.lua_error = "msgarea"
-...
+for _, target in ipairs({
+  "wmsg",
+  "emsg",
+  "typed_cmd",
+  "list_cmd",
+  "lua_error",
+  "lua_print",
+  "echoerr",
+}) do
+  ---@diagnostic disable-next-line: assign-type-mismatch
+  targets[target] = "msgarea"
+end
 ```
 
 ### 2. Open any window in the `msgarea`
@@ -113,7 +127,7 @@ This means if window A is set to `height=8`, and window B is set to `height=10`,
 
 Here's a video where I demonstrate having multiple windows in the view:
 
-https://github.com/user-attachments/assets/d8e43571-a317-4b30-b6bc-4b0fb16ed697
+https://github.com/user-attachments/assets/429393aa-8635-4792-a89d-7205796265bb
 
 ## Examples
 Here are some examples I use in my config that I find really nice:
@@ -124,11 +138,7 @@ This requires you to call <code>require("msgarea.blink_integration").enable()</c
 > [!NOTE]
 > if you want command descriptions like I have here see my blink config https://github.com/edisj/dotfiles/blob/8b17faf5f6882153e9456ecf4a6b69d9e042f777/linux/.config/nvim/plugin/4_plugins/blink.lua#L125-L178
 
-https://github.com/user-attachments/assets/ae8cc278-a016-4d5a-99be-d92d4ed99cfc
-
-<sub>
-
-</sub>
+https://github.com/user-attachments/assets/aea1b357-702a-463c-8a65-f6ae8740cf30
 
 ### ● picker (I use [mini](https://github.com/nvim-mini/mini.pick))
 Just add this to your `mini.pick` config (or whichever picker you use that lets you set win config options):
