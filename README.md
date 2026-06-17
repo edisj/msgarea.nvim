@@ -5,6 +5,8 @@ An experimental proof-of-concept for a "msgarea" view similar to "minibuffer" in
 > [!WARNING]
 > This is only wrapped up like a plugin for fun and convenience of installation. It's currently NOT a "plugin" in the sense that it will be stable or maintained.
 
+<img width="1855" height="1082" alt="msgarea_pic" src="https://github.com/user-attachments/assets/dd3915ab-0fbb-45ec-9942-3022dafc0049" />
+
 ## The main idea
 The [Neovim 0.12 ui2 system](https://neovim.io/doc/user/lua/#ui2) introduced a new way for routing messages to different "views" as targets (e.g. "cmd", "pager", "msg").
 While it's fantastic and eliminated the annoying "press enter" blocking messages, some messages are a bit _too_ ephermal.
@@ -112,14 +114,57 @@ This means if window A is set to `height=8`, and window B is set to `height=10`,
 ## Examples
 Here are some examples I use in my config that I find really nice:
 
-- blink.cmp completions (like [vertico](https://github.com/minad/vertico) in emacs)
+### blink.cmp completions (like [vertico](https://github.com/minad/vertico) in emacs)</summary>
 
-- picker (I use [mini](https://github.com/nvim-mini/mini.pick))
+https://github.com/user-attachments/assets/ae8cc278-a016-4d5a-99be-d92d4ed99cfc
 
-- output of vim.system command
+<sub>
+This requires you to call <code>require("msgarea.blink_integration").enable()</code> somewhere in your config. NOTE: if you want command descriptions like I have here see my blink config https://github.com/edisj/dotfiles/blob/8b17faf5f6882153e9456ecf4a6b69d9e042f777/linux/.config/nvim/plugin/4_plugins/blink.lua#L125-L178
+</sub>
 
-- quickfix list
+### picker (I use [mini](https://github.com/nvim-mini/mini.pick))
+<img width="1855" height="1082" alt="minidemo2" src="https://github.com/user-attachments/assets/ffe31d96-f6c7-41fe-a8a5-af8187814195" />
 
-- terminal
+Just add this to your `mini.pick` (or whichever picker you use that lets you set win config options) config:
 
-- 
+```lua
+require("mini.pick").setup({
+  window = {
+    config = {
+      relative = "msgarea",
+      border = { "▔", "▔", "▔", " ", " ", " ", " ", " " },
+      height = 15,
+    },
+  },
+})
+```
+
+### output of vim.system command
+
+https://github.com/user-attachments/assets/8cb5fb3a-ed33-4306-b791-004805e79aeb
+
+
+
+### quickfix list (2 example usecases)
+- in edit->compile->edit context:
+
+https://github.com/user-attachments/assets/e4e8ca4a-8936-423e-8047-0201566c86c8
+
+- quickfix diagnostics
+
+https://github.com/user-attachments/assets/b35915e5-7a57-41f9-8239-edd87a89de1b
+
+### terminal
+https://github.com/user-attachments/assets/0f320eb0-3746-4af6-b54c-07f872521317
+
+Here's the minimal amount of code to set it set it up:
+```lua
+local buf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_call(buf, function() vim.cmd.terminal() end)
+vim.api.nvim_open_win(buf, true, {
+  title = "THIS WILL GO IN THE WINBAR",
+  relative = "msgarea",
+  style = "minimal",
+  height = 15,
+})
+```
