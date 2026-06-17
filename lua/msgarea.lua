@@ -22,7 +22,7 @@ local function _set_focus_and_add_to_history_ring(winid)
   _ring_idx = ((_ring_idx - 1) % _RING_SIZE) + 1 -- clamp _rind_idx to 1.._RING_SIZE
   _focused_history_ring[_ring_idx] = winid
 end
-M.state.ring = _focused_history_ring
+
 setmetatable(M.state, {
   __index = function(t, k)
     if k == "focused" then
@@ -145,7 +145,7 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
     title == nil and ""
     or "%{%v:lua.require'msgarea.winbar'.render()%}"
 
-  local augroup = api.nvim_create_augroup("msgarea-" .. tostring(winid), { clear = true })
+  local augroup = api.nvim_create_augroup("msgarea.nvim-" .. tostring(winid), { clear = true })
   local on = function(event, cb)
     api.nvim_create_autocmd(event, {
       group = augroup,
@@ -220,7 +220,8 @@ M.show = function(opts)
   -- TODO: maybe add opts.winid / opts.title to show with specific window focused
 
   if #state.active_windows == 0 then
-    if not opts.silent then warn("no active windows") end return
+    if not opts.silent then warn("no active windows") end
+    return
   end
 
   -- NOTE: this case occurs when focus needs to return to a window not in history...

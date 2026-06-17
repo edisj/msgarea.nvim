@@ -22,7 +22,7 @@ end
 local _win
 local ensure_win = function()
   local buf = ensure_buf()
-  local height = api.nvim_buf_line_count(buf)
+  local height = api.nvim_buf_line_count(buf) + 1
   height = math.min(height, msgarea.max_height())
 
   if _win and api.nvim_win_is_valid(_win) then

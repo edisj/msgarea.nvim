@@ -37,6 +37,7 @@ local update_position = function()
   })
 end
 
+local _augroup_name = "msgarea-blink-autocmds"
 local _saved_blink_config = {}
 local setup_autocmds = function()
 
@@ -57,7 +58,7 @@ local setup_autocmds = function()
     end
   end
 
-  local group = api.nvim_create_augroup("msgarea-blink-autocmds", { clear = true })
+  local group = api.nvim_create_augroup(_augroup_name, { clear = true })
   local on = function(event, pattern, desc, cb)
     api.nvim_create_autocmd(event, {
       group = group,
@@ -110,7 +111,7 @@ end
 
 M.disable = function()
   menu.update_position = _update_position
-  api.nvim_del_augroup_by_name("msgarea-blink-autocmds")
+  api.nvim_del_augroup_by_name(_augroup_name)
 end
 
 return M
