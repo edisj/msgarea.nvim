@@ -145,8 +145,10 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
     title == nil and ""
     or "%{%v:lua.require'msgarea.winbar'.render()%}"
 
+  local augroup = api.nvim_create_augroup("msgarea-" .. tostring(winid), { clear = true })
   local on = function(event, cb)
     api.nvim_create_autocmd(event, {
+      group = augroup,
       pattern = tostring(winid),
       callback = function(...)
         if not (winid and api.nvim_win_is_valid(winid)) then return true end
@@ -156,6 +158,7 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
   end
 
   on("WinClosed", function()
+    vim.schedule(function() api.nvim_del_augroup_by_id(augroup) end)
     local idx
     for i, win in ipairs(M.state.active_windows) do
       if win.winid == winid then
@@ -176,7 +179,6 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
       M.show({ silent = true })
     end
 
-    -- api.nvim__redraw({ win = _focused_winid, winbar = true })
     vim.schedule(function()
       if #M.state.active_windows == 0 then
         vim.o.cmdheight = M.original_cmdheight
@@ -186,9 +188,10 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
     end)
   end)
 
-  on("WinResized", function(ev)
-    -- vim.print(ev)
-  end)
+  -- TODO: update cmdheight on winresize
+  -- on("WinResized", function(ev)
+  --   vim.print(ev)
+  -- end)
 
   -- the idea here is that I open every window with `hide=true` and then update
   -- state to focus this window. `show()` handles cmdheight and window show/hide logic
