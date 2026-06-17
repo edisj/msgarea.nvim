@@ -17,7 +17,8 @@ M.render = function()
     :map(function(win)
       if not win.title then return end
       local hl = win.winid == state.focused and "TabLineSel" or "TabLine"
-      local text = with_hl(win.title, hl)
+      local text = vim.trim(win.title)
+      text = with_hl(" " .. text .. " ", hl)
       return with_click(text, win.winid)
     end)
     :totable())
