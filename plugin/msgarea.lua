@@ -87,7 +87,7 @@ on("OptionSet", "cmdheight", "refresh height of active windows on cmdheight chan
 end)
 
 -- NOTE: this occurs if, for example, you press a keymap to focus a msgarea window
--- and that window is not the currently focused window in the msgarea
+-- and it's not the currently focused window in require("msgarea").state.focused
 on("WinEnter", "*", "ensure msgarea window is brought to front when focused", function(ev)
   local msgarea = require("msgarea")
   local winid
