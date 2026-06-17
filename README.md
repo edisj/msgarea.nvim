@@ -20,7 +20,7 @@ Focusing the `pager` with e.g. `g<` still closes the "Messages" window, so that 
 
 
 When I say `msgarea`, I mean the view or region of the screen below the statusline, where the "Messages" window is just one window that can be opened in the view.
-Here, _any_ arbitrary window can be opened in the `msgarea` (see Usage), where the winbar provides clickable tabs to see which windows are active.
+Here, _any_ arbitrary window can be opened in the `msgarea` (see [Usage](#usage) and [Examples](#examples)), where the winbar provides clickable tabs to see which windows are active.
 
 ### How it works
 It's basically just monkey patching and autocmds... 
