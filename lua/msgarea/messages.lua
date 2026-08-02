@@ -33,8 +33,6 @@ M.msg_show = function(msg_show, kind, content, replace_last, history, append, id
     or (kind ~= "" and ui.cfg.msg.targets[kind])
     or ui.cfg.msg.targets.default
 
-  vim.notify("Kind: " .. kind .. " tgt: " .. tgt)
-
   if tgt == "msgarea" then
     internal.show_message(kind, content, replace_last)
   else -- fallback to original msg_show for all other targets

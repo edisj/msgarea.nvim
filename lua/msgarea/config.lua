@@ -5,7 +5,7 @@ local default_config = {
   enabled = true,
 
   -- Title for persistent messages in message area
-  -- These messages are routed through `target=msgarea` in ui2 config.
+  -- These messages are routed through `<target> = "msgarea"` in ui2 config.
   -- Can either be:
   --   string   - A static title to use for all messages.
   --   function - A callable that receives parameter `kind` (:h ui-messages)
@@ -21,7 +21,7 @@ local default_config = {
 
   -- Which message `kind`s should be sent to the msgarea.
   -- (see :h ui-messages for all valid kinds)
-  -- Sets corresponding target field to `msgarea` in ui2 (:h ui2)
+  -- Sets corresponding target field to `"msgarea"` in ui2 (:h ui2)
   msgarea_targets = {},
 
   -- View options
@@ -39,7 +39,7 @@ local default_config = {
 
     -- Min and max height of the view, if fraction between 0-1,
     -- it is % of editor size, otherwise absolute size
-    min_height = 3,
+    min_height = 1,
     max_height = 0.3,
 
     -- Determines position of tabs in winbar.
@@ -55,9 +55,10 @@ local default_config = {
     winbar_min_tabs = 1,
   },
 
+  -- Cmdline completion options
   cmdline = {
     -- Whether to enable cmdline completion behaviors.
-    -- If using a external cmdline like `tiny-cmdline.nvim`,
+    -- If using an external cmdline like `tiny-cmdline.nvim`,
     -- you probably want to disable this.
     enabled = false,
 
@@ -72,10 +73,10 @@ local default_config = {
     -- `vim.o.pumheight` is used as the max height.
     dynamic_height = true,
 
-    -- Delay in ms for resizing the cmdheight. If set to 0, typing quickly
+    -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
     -- will cause the the cmdheight to bounce rapidly.
     -- If `dynamic_height = false` then this has no effect.
-    resize_delay = 200,
+    resize_throttle_ms = 200,
 
     -- Whether to add description text to cmdline completions.
     -- For ex-cmds, parsed directly from `index.txt` (:h ex-cmds-index),
@@ -86,10 +87,11 @@ local default_config = {
     --     Call `require("msgarea.cache").refresh()` to repopulate cache at any time.
     --   - If using `blink.cmp` and you are not seeing descriptions, make sure in
     --     your bilnk config, `cmdline.completion.menu.draw.columns` includes "label_description".
+    --   - Subject to change depending on https://github.com/neovim/neovim/pull/39672
     descriptions = true,
   },
-
 }
+
 ---@type Msgarea.Config
 local _config
 
@@ -125,9 +127,9 @@ local validate = function(field, value, expected)
   return "invalid config field `" .. field .. "`, expected " .. expected .. "."
 end
 
---- Validates user config and merges with default config.
---- Returns true and merged config on success
---- or false and list of error messages on fail.
+---Validates user config and merges with default config.
+---Returns true and merged config on success
+---or false and list of error messages on fail.
 ---
 ---@param user_config Msgarea.UserConfig
 ---@return boolean
@@ -160,7 +162,7 @@ M.setup = function(user_config)
     cmp_provider = { "blink.cmp" },
     descriptions = "boolean",
     dynamic_height = "boolean",
-    resize_delay = "number",
+    resize_throttle_ms = "number",
   } do
     errors[#errors + 1] = validate("cmdline." .. field, config.cmdline[field], expected)
   end
@@ -195,7 +197,7 @@ end
 ---@field cmp_provider? "native"|"blink.cmp"
 ---@field descriptions? boolean
 ---@field dynamic_height? boolean
----@field resize_delay? number
+---@field resize_throttle_ms? number
 
 ---@class (exact) Msgarea.Config
 ---@field enabled boolean
@@ -219,6 +221,6 @@ end
 ---@field cmp_provider "native"|"blink.cmp"
 ---@field descriptions boolean
 ---@field dynamic_height boolean
----@field resize_delay number
+---@field resize_throttle_ms number
 
 return M

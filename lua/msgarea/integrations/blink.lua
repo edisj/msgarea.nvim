@@ -8,7 +8,7 @@ local menu = require("blink.cmp.completion.windows.menu")
 
 local _last = 0
 local throttled = function(f)
-  local delay = config.get().cmdline.resize_delay
+  local delay = config.get().cmdline.resize_throttle_ms
   return function(...)
     local now = vim.uv.now()
     if now - _last >= delay then
