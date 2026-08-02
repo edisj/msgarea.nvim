@@ -6,26 +6,22 @@ This lets you:
 <table>
   <tr>
     <td align="center">
-      <img src="" width="300"><br>
-      <b>Image 1</b><br>
-     Open cmdline completions in a [vertico](https://github.com/minad/vertico) + [marginalia](https://github.com/minad/marginalia) style layout.
+      <img src="" width="300">
+      Open cmdline completions in a <a href="https://github.com/minad/vertico">vertico</a> + <a href="https://github.com/minad/marginalia">marginalia</a> style layout.
     </td>
     <td align="center">
-      <img src="" width="300"><br>
-      <b>Image 2</b><br>
-      Open arbitary ephemeral windows (like your favorite picker) in the `msgarea` view.
+      <img src="" width="300">
+      Open arbitrary ephemeral windows (like your favorite picker) in the <code>msgarea</code> view.
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="" width="300"><br>
-      <b>Image 3</b><br>
-      Route ui-messages to the `msgarea` view either as epehemeral or persistent windows.
+      <img src="" width="300">
+      Route ui-messages to the <code>msgarea</code> view either as ephemeral or persistent windows.
     </td>
     <td align="center">
-      <img src="" width="300"><br>
-      <b>Image 4</b><br>
-      Open as many persistent `msgarea` windows as you like in an organized, tabbed view.
+      <img src="" width="300">
+      Open as many persistent <code>msgarea</code> windows as you like in an organized, tabbed view.
     </td>
   </tr>
 </table>
