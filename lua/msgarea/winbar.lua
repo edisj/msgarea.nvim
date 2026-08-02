@@ -1,5 +1,5 @@
-local msgarea = require("msgarea")
-
+local view = require("msgarea.view")
+local config = require("msgarea.config")
 local M = {}
 
 local function with_click(text, winid)
@@ -11,18 +11,22 @@ local function with_hl(text, hl)
 end
 
 M.render = function()
-  local state = msgarea.state
+  local state = view.state
+  local sep = config.get().view.winbar_separator
   local winbar_str = table.concat(vim
-    .iter(state.active_windows)
-    :map(function(win)
+    .iter(ipairs(state.windows))
+    :map(function(_, win)
       if not win.title then return end
-      local hl = win.winid == state.focused and "TabLineSel" or "TabLine"
-      local text = vim.trim(win.title)
-      text = with_hl(" " .. text .. " ", hl)
+      local hl = win.winid == state.focused and "MsgAreaWinBarSel" or "MsgAreaWinBarFill"
+      local text = with_hl(win.title, hl)
       return with_click(text, win.winid)
     end)
-    :totable())
-  return winbar_str .. "%*"
+    :totable(), with_hl(sep, "MsgAreaWinBarSep"))
+  local pos = config.get().view.winbar_pos
+  return pos == "left"   and winbar_str .. "%*"
+      or pos == "right"  and "%=" .. winbar_str .. "%*"
+      or pos == "center" and "%=" .. winbar_str .. "%*%="
+      or winbar_str
 end
 
 -- args: minwid, clicks, button, modifiers
@@ -32,8 +36,7 @@ M.on_click = function(minwid, _, button, _)
   -- not the clicked window
   local winid = minwid
   if button == "l" then
-    msgarea.state.focused = winid
-    msgarea.show({ silent = true })
+    view.show({ silent = true, focused = winid })
   elseif button == "r" then
     vim.api.nvim_win_close(winid, true)
   end
