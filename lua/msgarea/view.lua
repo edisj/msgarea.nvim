@@ -82,7 +82,8 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
   local k = is_ephemeral and "ephemeral" or #M.state.windows + 1
   M.state.windows[k] = win_spec
 
-  ui2.msg.cmd:clear()
+  -- FIXME: this is a bandaid pcall since clear is not available in 0.12
+  pcall(ui2.msg.cmd.clear, ui2.msg.cmd)
   M.show({ silent = true, focused = not is_ephemeral and winid or nil })
   return winid
 end
