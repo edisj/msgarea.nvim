@@ -37,7 +37,7 @@ M.setup = function(user_config)
     --   require("msgarea.integrations.native").enable()
     end
   else
-    require("msgarea.integrations.blink").disable()
+    pcall(function() require("msgarea.integrations.blink").disable() end)
   end
 
   local ui2_targets = require("vim._core.ui2").cfg.msg.targets
