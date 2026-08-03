@@ -7,21 +7,22 @@ This lets you:
   <tr>
     <td align="center">
       <img width="1891" height="1161" alt="msgarea_cmdline" src="https://github.com/user-attachments/assets/a01e2b83-a493-4732-a03b-23c6e9cece56" />
-      Open cmdline completions in a <a href="https://github.com/minad/vertico">vertico</a> + <a href="https://github.com/minad/marginalia">marginalia</a> style layout.
+      <sub>Open cmdline completions in a <a href="https://github.com/minad/vertico">vertico</a> + <a href="https://github.com/minad/marginalia">marginalia</a> style layout.
+      (currently only <code>blink.cmp</code> is supported, working on native completions...)</sub>
     </td>
     <td align="center">
       <img width="1891" height="1153" alt="msgarea_picker" src="https://github.com/user-attachments/assets/524136fb-6f23-4970-81fe-425eb066ebfc" />
-      Open arbitrary ephemeral windows (like your favorite picker) in the <code>msgarea</code> view.
+      <sub>Open arbitrary ephemeral windows (like your favorite picker) in the <code>msgarea</code> view. (<code>mini.pick</code> is shown here)</sub>
     </td>
   </tr>
   <tr>
     <td align="center">
       <img width="1897" height="1152" alt="msgarea_error" src="https://github.com/user-attachments/assets/65a2dd7c-3b8d-45e3-b174-45bfcc39b4d3" />
-      Route ui-messages to the <code>msgarea</code> view either as ephemeral or persistent windows.
+      <sub>Route ui-messages to the <code>msgarea</code> view either as ephemeral or persistent windows.</sub>
     </td>
     <td align="center">
       <img width="1896" height="1152" alt="msgarea_tabs" src="https://github.com/user-attachments/assets/dc25269d-d3cc-47e8-a5e6-8f43388ea166" />
-      Open as many persistent <code>msgarea</code> windows as you like in an organized, tabbed view.
+      <sub>Open as many persistent <code>msgarea</code> windows as you like in an organized, tabbed view.</sub>
     </td>
   </tr>
 </table>
@@ -65,7 +66,7 @@ vim.pack.add({
 ## Quick start
 Make sure `ui2` is enabled
 ```lua
--- highly recommended to the default target to "msg", otherwise "cmd" messages will be covered by msgarea windows
+-- highly recommended to set the default target to "msg", otherwise "cmd" messages will be covered by msgarea windows
 require("vim._core.ui2").enable({ msg = { targets = { default = "msg" } } })
 ```
 
@@ -193,6 +194,8 @@ When I say `msgarea`, I mean the view or region of the screen below the statusli
 Here, _any_ arbitrary window can be opened in the `msgarea` (see [Usage](#usage) and [Examples](#examples)), where the winbar provides clickable tabs to see which windows are active.
 
 ## Examples
+
+## Recipes
 
 ## API
 
