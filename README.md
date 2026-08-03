@@ -6,21 +6,21 @@ This lets you:
 <table>
   <tr>
     <td align="center">
-      <img src="" width="300">
+      <img width="1891" height="1161" alt="msgarea_cmdline" src="https://github.com/user-attachments/assets/a01e2b83-a493-4732-a03b-23c6e9cece56" />
       Open cmdline completions in a <a href="https://github.com/minad/vertico">vertico</a> + <a href="https://github.com/minad/marginalia">marginalia</a> style layout.
     </td>
     <td align="center">
-      <img src="" width="300">
+      <img width="1891" height="1153" alt="msgarea_picker" src="https://github.com/user-attachments/assets/524136fb-6f23-4970-81fe-425eb066ebfc" />
       Open arbitrary ephemeral windows (like your favorite picker) in the <code>msgarea</code> view.
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="" width="300">
+      <img width="1897" height="1152" alt="msgarea_error" src="https://github.com/user-attachments/assets/65a2dd7c-3b8d-45e3-b174-45bfcc39b4d3" />
       Route ui-messages to the <code>msgarea</code> view either as ephemeral or persistent windows.
     </td>
     <td align="center">
-      <img src="" width="300">
+      <img width="1896" height="1152" alt="msgarea_tabs" src="https://github.com/user-attachments/assets/dc25269d-d3cc-47e8-a5e6-8f43388ea166" />
       Open as many persistent <code>msgarea</code> windows as you like in an organized, tabbed view.
     </td>
   </tr>
@@ -30,21 +30,15 @@ and more...
 
 ## Features
 
+## Dependencies
+- Neovim >= 0.12
 
 ## Installation
 
 > [!WARNING]
-> This plugin requires Neovim >= 0.12
->
-> This is an experimental plugin built on top of the already experimental ui2.
-> As this plugin aims to follow the development of ui2 closely, any upstream
+> This is an experimental plugin built on top of the _already_ experimental `ui2`.
+> As this plugin monkey-patches several `ui2` functions and aims to follow the development of `ui2` closely, any upstream
 > breaking changes may introduce breaking changes here.
-
-> [!TIP]
-> I recommend these two settings for the best experience:
->
-> `vim.o.splitkeep = topline` or `vim.o.splitkeep = screen` (otherwise text lines bounce around a lot when the view is opened/closed)
-> `require("vim._core.ui2").enable({ msg = { targets = { default = "msg" } } })` (otherwise msgs sent to "cmd" while view is open are covered by `msgarea` windows)
 
 <details>
 <summary>vim.pack (recommended)</summary>
@@ -58,7 +52,7 @@ vim.pack.add({
 
 <details>
 <summary>lazy.nvim</summary>
-
+  
 ```lua
 {
   "edisj/msgarea.nvim",
@@ -68,8 +62,23 @@ vim.pack.add({
 
 </details>
 
-## Quickstart
+## Quick start
+Make sure `ui2` is enabled
+```lua
+-- highly recommended to the default target to "msg", otherwise "cmd" messages will be covered by msgarea windows
+require("vim._core.ui2").enable({ msg = { targets = { default = "msg" } } })
+```
 
+Add the following to your init.lua or somewhere in your config
+```lua
+-- *highly* recommended to use one of these settings,
+-- otherwise screen lines bounce around a lot when the view is opened/closed
+-- vim.o.splitkeep = "topline"
+-- vim.o.splitkeep = "screen"
+
+-- pass no argument to use default config
+require("msgarea").setup()
+```
 
 ## Options
 
