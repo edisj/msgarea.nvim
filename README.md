@@ -213,7 +213,10 @@ When I say `msgarea`, I mean the view or region of the screen below the statusli
 Here, _any_ arbitrary window can be opened in the `msgarea` (see [Usage](#usage) and [Examples](#examples)), where the winbar provides clickable tabs to see which windows are active.
 
 ## Recipes
-TODO
+- [Open a terminal window in the msgarea](doc/recipes.md#open-a-terminal-window-in-the-msgarea)
+- [Open quickfix/loclist in the msgarea](doc/recipes.md#open-quickfix/loclist-in-the-msgarea)
+- [Open a picker in the msgarea](doc/recipes.md#open-a-picker-in-the-msgarea)
+- [Emulating Emacs `M-x find-file` with [mini.pick](https://github.com/nvim-mini/mini.pick)]()
 
 ## API
 

@@ -213,7 +213,8 @@ USAGE GUIDE                                                      *msgarea-usage*
 This section aims to explain key concepts used by the plugin, and how I
 envisioned the plugin to be used, which is by no means the only way.
 
-TODO: see recipes
+See: https://github.com/edisj/msgarea.nvim/tree/main/doc/recipes.md for usage
+examples.
 
 ------------------------------------------------------------------------------
 EPHEMERAL VS PERSISTENT                                      *msgarea-ephemeral*
