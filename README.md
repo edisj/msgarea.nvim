@@ -216,7 +216,7 @@ Here, _any_ arbitrary window can be opened in the `msgarea` (see [Usage](#usage)
 - [Open a terminal window in the msgarea](doc/recipes.md#open-a-terminal-window-in-the-msgarea)
 - [Open quickfix/loclist in the msgarea](doc/recipes.md#open-quickfix/loclist-in-the-msgarea)
 - [Open a picker in the msgarea](doc/recipes.md#open-a-picker-in-the-msgarea)
-- [Emulating Emacs `M-x find-file` with [mini.pick](https://github.com/nvim-mini/mini.pick)]()
+- [Emulating Emacs `M-x find-file` with 'mini.pick'](doc/recipes.md#emulating-emacs-m-x-find-file-with-minipick)
 
 ## API
 
