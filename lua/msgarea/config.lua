@@ -4,6 +4,16 @@ local default_config = {
   -- with `require("msgarea").config({ enabled = false })`
   enabled = true,
 
+  -- List of message `kind`s that should be sent to the msgarea
+  -- NOTE: equivalent to setting <kind> = "msgarea" in ui2.cfg.msg.targets
+  -- Valid message kinds:
+  --   - "lua_print"
+  --   - "lua_error"
+  --   - "list_cmd"
+  --   - ...
+  -- (see :h ui-messages for all valid kinds)
+  msgarea_targets = {},
+
   -- Title for persistent messages in message area
   -- These messages are routed through `<target> = "msgarea"` in ui2 config.
   -- Can either be:
@@ -18,11 +28,6 @@ local default_config = {
   --     return titles[kind]
   --   end
   messages_title = " Messages ",
-
-  -- Which message `kind`s should be sent to the msgarea.
-  -- (see :h ui-messages for all valid kinds)
-  -- Sets corresponding target field to `"msgarea"` in ui2 (:h ui2)
-  msgarea_targets = {},
 
   -- View options
   view = {

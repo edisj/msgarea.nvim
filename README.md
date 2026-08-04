@@ -30,6 +30,13 @@ This lets you:
 and more...
 
 ## Features
+  - Route `ui-messages` to the msgarea as ephemeral or persistent windows.
+    See `:h msgarea-ephemeral` for distinction between ephemeral vs persistent.
+  - Open persistent or ephemeral windows in the msgarea with the native
+    `nvim_open_win()` api. This plugin patches `nvim_open_win` and
+    `nvim_win_set_config` to accept a new option, `relative = "msgarea"`.
+  - Integrate with any plugin that exposes `win_config` options
+    somewhere in the plugin config. See `:h msgarea-integrating-with-plugins` for details.
 
 ## Dependencies
 - Neovim >= 0.12
@@ -53,7 +60,7 @@ vim.pack.add({
 
 <details>
 <summary>lazy.nvim</summary>
-  
+
 ```lua
 {
   "edisj/msgarea.nvim",
@@ -77,8 +84,15 @@ Add the following to your init.lua or somewhere in your config
 -- vim.o.splitkeep = "topline"
 -- vim.o.splitkeep = "screen"
 
--- pass no argument to use default config
+-- pass no argument or `{}` to use default config
 require("msgarea").setup()
+```
+
+You may want to set a keymap to close the msgarea
+```lua
+vim.keymap.set("n", "<C-w>m", function()
+  require("msgarea").close_all()
+end, { desc = "close msgarea" })
 ```
 
 ## Options
@@ -88,6 +102,16 @@ require("msgarea").setup({
   -- Whether to enable the plugin. Can be disabled at runtime
   -- with `require("msgarea").config({ enabled = false })`
   enabled = true,
+
+  -- List of message `kind`s that should be sent to the msgarea
+  -- NOTE: equivalent to setting <kind> = "msgarea" in ui2.cfg.msg.targets
+  -- Valid message kinds:
+  --   - "lua_print"
+  --   - "lua_error"
+  --   - "list_cmd"
+  --   - ...
+  -- (see :h ui-messages for all valid kinds)
+  msgarea_targets = {},
 
   -- Title for persistent messages in message area
   -- These messages are routed through `<target> = "msgarea"` in ui2 config.
@@ -103,11 +127,6 @@ require("msgarea").setup({
   --     return titles[kind]
   --   end
   messages_title = " Messages ",
-
-  -- Which message `kind`s should be sent to the msgarea.
-  -- (see :h ui-messages for all valid kinds)
-  -- Sets corresponding target field to `"msgarea"` in ui2 (:h ui2)
-  msgarea_targets = {},
 
   -- View options
   view = {
@@ -193,10 +212,29 @@ Focusing the `pager` with e.g. `g<` still closes the "Messages" window, so that 
 When I say `msgarea`, I mean the view or region of the screen below the statusline, where the "Messages" window is just one window that can be opened in the view.
 Here, _any_ arbitrary window can be opened in the `msgarea` (see [Usage](#usage) and [Examples](#examples)), where the winbar provides clickable tabs to see which windows are active.
 
-## Examples
-
 ## Recipes
+TODO
 
 ## API
 
-## Highlights
+### `require("msgarea").close_all()`
+
+Close all active msgarea windows.
+
+### `require("msgarea").show(opts)`
+
+Show or refresh the msgarea view.
+
+- `opts` (`table?`)
+  - `silent?` (`boolean`) — supress warning message (default: `false`)
+  - TODO
+
+
+### `require("msgarea").hide(opts)`
+
+Hide, but do not close, all msgarea windows.
+Subsequent `require("msgarea").show()` will restore saved view state.
+
+- `opts` (`table?`)
+  - `cmdheight?` (`integer`) — set cmdheight to this after hiding (default: `nil`)
+
