@@ -134,12 +134,12 @@ end
 
 ---@class (exact) MsgArea.View.ShowOpts
 ---@field silent? boolean suppress warning msg (default false)
+---@field flush? boolean (default false)
 ---@field focused? integer focused winid override
 ---@field height? integer view height override
 ---@field cmdheight? integer cmdheight override
 ---@field style? "msgarea"|"split" style override
 ---@field winbar_min_tabs? integer config.view.winbar_min_tabs override
----@field flush? boolean (default false)
 
 ---Show or refresh the msgarea view.
 ---@param opts? MsgArea.View.ShowOpts

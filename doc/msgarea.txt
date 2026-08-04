@@ -1,0 +1,363 @@
+*msgarea.txt* Extends |ui2| with a new target: `msgarea`
+*msgarea.nvim* *msgarea*
+
+Author:   Edis Jakupovic
+Version:  v0.1
+Homepage: <https://github.com/edisj/msgarea.nvim>
+License:  MIT license
+
+
+==============================================================================
+CONTENTS                                                      *msgarea-contents*
+
+  1. Introduction                                             |msgarea-intro|
+  2. Setup                                                    |msgarea-setup|
+  3. Usage Guide                                              |msgarea-usage|
+
+==============================================================================
+INTRODUCTION                                                     *msgarea-intro*
+
+The Neovim 0.12 |ui2| system introduced a new way for routing messages to
+different "views" as targets (e.g. "cmd", "pager", "msg"). While it's
+fantastic and eliminated the annoying "press enter" blocking messages, some
+messages are a bit too ephermal. Routing to msg only shows the message for a
+few seconds and requires you to click on the message window with your mouse
+to keep it alive. Routing to cmd shows the message in a convenient bottom
+view, but is immediately removed on cursor move. Of course, you can always
+press |g<| to refocus the last message in the pager, but in some cases, I find
+myself having to reopen and close the last message several times to reread
+because it doesn't stick around when exiting (for example when reading a lua
+error and then going to the line referred to in stack trace).
+
+The solution presented here is a new view (msgarea) that is sits somewhere
+in between pager and cmd in terms of function. Setting a message target to
+msgarea will now open a "Messages" window below the statusline and
+automatically handle setting/resetting cmdheight when message content is
+emitted to the handler. Focusing the pager with e.g. |g<| still closes the
+"Messages" window, so that behavior is the same.
+
+When I say msgarea, I mean the view or region of the screen below the
+statusline, where the "Messages" window is just one window that can be opened
+in the view. Here, any arbitrary window can be opened in the msgarea
+(see Usage and Examples), where the winbar provides clickable tabs to see
+which windows are active.
+
+Features ~
+  - Route |ui-messages| to the msgarea as ephemeral or persistent windows.
+    See |msgarea-ephemeral| for distinction between ephemeral vs persistent.
+  - Open persistent or ephemeral windows in the msgarea with the native
+    |nvim_open_win()| api. This plugin patches `nvim_open_win` and
+    `nvim_win_set_config` to accept a new option, `relative = "msgarea"`.
+  - Integrate with any plugin that exposes |api-win-config| options
+    somewhere in the plugin config.
+    See |msgarea-integrating-with-plugins| for details.
+
+==============================================================================
+SETUP                                                            *msgarea-setup*
+
+This plugin is initialized with a setup call `require("msgarea").setup()`
+
+Note: be sure you have enabled |ui2| with `require("vim._core.ui2").enable()`
+
+Once loaded, you can:
+
+  - open an ephemeral window (`title == nil`): >lua
+
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_open_win(buf, false, { relative = "msgarea", height = 12 })
+<
+
+  - open a persistent window (`title ~= nil`): >lua
+
+    local buf = vim.api.nvim_create_buf(false, true)
+    local cfg = { title = " A persistent window ", relative = "msgarea", height = 12 }
+    vim.api.nvim_open_win(buf, false, cfg)
+<
+
+------------------------------------------------------------------------------
+CONFIG                                                          *msgarea-config*
+
+Defaults ~
+>lua
+  {
+    -- Whether to enable the plugin. Can be disabled at runtime
+    -- with `require("msgarea").config({ enabled = false })`
+    enabled = true,
+
+    -- List of message `kind`s that should be sent to the msgarea
+    -- NOTE: equivalent to setting <kind> = "msgarea" in ui2.cfg.msg.targets
+    -- Valid message kinds:
+    --   - "lua_print"
+    --   - "lua_error"
+    --   - "list_cmd"
+    --   - ...
+    -- (see :h ui-messages for all valid kinds)
+    msgarea_targets = {},
+
+    -- Title for persistent messages in message area
+    -- These messages are routed through `<target> = "msgarea"` in ui2 config.
+    -- Can either be:
+    --   string   - A static title to use for all messages.
+    --   function - A callable that receives parameter `kind` (:h ui-messages)
+    --              and returns a string or `nil`.
+    --              If return is `nil`, message is treated as ephemeral.
+    -- For example, to treat `lua_print` and `lua_error` kinds as persistent
+    -- and everything else as ephemeral:
+    --   function(kind)
+    --     local titles = { lua_print = " Lua Print ", lua_error = " Lua Error " }
+    --     return titles[kind]
+    --   end
+    messages_title = " Messages ",
+
+    -- View options
+    view = {
+      -- Determines whether to place the view below statusline
+      -- or as a regular split.
+      -- Valid styles are:
+      --   msgarea - Open below statusline in the message area.
+      --   split   - Open as a regular "below" split.
+      style = "msgarea",
+      -- While in cmdline, the view is shifted to this position.
+      style_while_in_cmdline = "split",
+      -- While an ephemeral window is open, view is shifted to this position.
+      style_while_in_ephemeral_win = "split",
+
+      -- Min and max height of the view, if fraction between 0-1,
+      -- it is % of editor size, otherwise absolute size
+      min_height = 1,
+      max_height = 0.3,
+
+      -- Determines position of tabs in winbar.
+      -- Analagous to `title_pos` in win config (:h nvim_open_win())
+      -- Valid positions are: "left" | "center" | "right"
+      winbar_pos = "left",
+
+      -- Optional separator between tabs in winbar.
+      winbar_separator = "",
+
+      -- Minimum number of msgarea windows needed to show tabs.
+      -- e.g. if 2, then tab is hidden when only a single window is open.
+      winbar_min_tabs = 1,
+    },
+
+    -- Cmdline completion options
+    cmdline = {
+      -- Whether to enable cmdline completion behaviors.
+      -- If using an external cmdline like `tiny-cmdline.nvim`,
+      -- you probably want to disable this.
+      enabled = false,
+
+      -- Which completion plugin you use.
+      -- Currently only `blink.cmp` is supported... working on native
+      -- Valid providers:
+      --   "blink.cmp"
+      cmp_provider = "blink.cmp",
+
+      -- Whether to dynamically resize cmdheight as completion window changes height.
+      -- If `false`, the height is set to `vim.o.pumheight`, otherwise
+      -- `vim.o.pumheight` is used as the max height.
+      dynamic_height = true,
+
+      -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
+      -- will cause the the cmdheight to bounce rapidly.
+      -- If `dynamic_height = false` then this has no effect.
+      resize_throttle_ms = 200,
+
+      -- Whether to add description text to cmdline completions.
+      -- For ex-cmds, parsed directly from `index.txt` (:h ex-cmds-index),
+      -- for usercmds, obtained from `vim.api.nvim_get_commands({})`.
+      -- Notes:
+      --   - If you find some usercmds are missing descriptions, they may have
+      --     been lazy loaded after cache was populated.
+      --     Call `require("msgarea.cache").refresh()` to repopulate cache at any time.
+      --   - If using `blink.cmp` and you are not seeing descriptions, make sure in
+      --     your bilnk config, `cmdline.completion.menu.draw.columns` includes "label_description".
+      --   - Subject to change depending on https://github.com/neovim/neovim/pull/39672
+      descriptions = true,
+    },
+  }
+<
+
+------------------------------------------------------------------------------
+HIGHLIGHT GROUPS                                             *msgarea-hl-groups*
+
+If you want to change any of the default highlight groups, set it
+directly with |nvim_set_hl()|
+
+Note:
+  The base highlight of the message area comes from the builtin |hl-MsgArea|
+
+  ----------------------------------------------------------------------------
+  Group                        Default       Description
+  ---------------------------- ------------- ---------------------------------
+  MsgAreaWinBar                Tabline       Msgarea winbar, not active tab label
+
+  MsgAreaWinBarFill            MsgArea       Msgarea winbar, where there are
+                                             no labels
+
+  MsgAreaWinBarSel             TabLineSel    Msgarea winbar, active tab label
+
+  MsgAreaWinBarSep             Comment       Separator char between tabs in winbar
+
+  MsgAreaCmpMenu               MsgArea       Cmdline completion menu window
+
+  MsgAreaCmpLabel              Msgarea       Cmdline completion label
+
+  MsgAreaCmpLabelDescription   MsgArea       Description text of completion label
+  ----------------------------------------------------------------------------
+
+
+==============================================================================
+USAGE GUIDE                                                      *msgarea-usage*
+
+This section aims to explain key concepts used by the plugin, and how I
+envisioned the plugin to be used, which is by no means the only way.
+
+TODO: see recipes
+
+------------------------------------------------------------------------------
+EPHEMERAL VS PERSISTENT                                      *msgarea-ephemeral*
+
+A key concept used here is the notion of an "ephemeral" window.
+Concretely, the disctinction between a persistent and ephemeral window
+comes down to the `win_config` options being set to:
+  - Ephemeral: `relative = "msgarea"` and `title = nil`.
+  - Persistent: `relative = "msgarea"` and `title = <some string>`.
+
+Therefore, the only distiction between the two is whether the `title` field
+was set in `nvim_open_win` or `nvim_win_set_config`.
+
+Ephemeral msgarea windows have the following special behaviors:
+  - always opened below the statusline
+  - max height is set by `require("vim._core.ui2").cfg.msg.cmd.height`
+  - window is automatically closed when leaving the window
+    or cursor moves outside the window
+  - if an ephemeral is already open, then TODO
+
+Persistent msgarea windows have the following behaviors:
+  - can be opened as normal split "below" or below statusline, depending on
+    config.view.style
+  - an unlimited amount can be opened at once
+  - the msgarea view can only display one persistent window at a time,
+    where the tabs in the winbar show all currently active windows
+
+
+------------------------------------------------------------------------------
+ROUTING UI-MESSAGES                                *msgarea-routing-ui-messages*
+
+Routing messages to the msgarea is a matter of setting the target of a
+message `kind` to `"msgarea"` (see |ui-messages| for all message kinds).
+For example, when you print something with `:= hello`, it's sent as a message
+of kind `lua_print` to the |ui2| message handler,
+`require("vim._core.ui2.messages").msg_show(...)`. The handler decides the
+view target ("msg", "cmd", "pager", etc). `msgarea.nvim` patches this handler
+to route messages to an additional `"msgarea"` target such that sending
+messages to the `"msgarea"` target follows the same pattern as |ui2|.
+
+Concretely, you must set the corresponding message `kind`'s target to "msgarea".
+
+This can be done directly when you enable |ui2|: >lua
+
+  require "vim._core.ui2".enable({
+    enable = true,
+    msg = {
+      targets = {
+        default = "msg",
+        lua_print = "msgarea",
+        lua_error = "msgarea",
+        list_cmd = "msgarea",
+        -- etc.
+      },
+    }
+  })
+<
+
+or when you configure `msgarea.nvim`: >lua
+
+  require("msgarea").setup({
+    msgarea_targets = {
+      "lua_error",
+      "lua_print",
+      "list_cmd",
+    },
+    -- here, lua_print will be an ephemeral message and all other
+    -- messages routed to the "msgarea" target will be persistent
+    -- with title " Messages "
+    messages_title = function(kind)
+      return kind ~= "lua_print" and " Messages " or nil
+    end,
+  })
+<
+
+Note: Whether a message kind is treated as ephemeral or persistent can be
+fine tuned by setting `config.messages_title` to a callable which receives
+the message `kind` as a parameter.
+
+
+------------------------------------------------------------------------------
+INTEGRATING WITH EXTERNAL PLUGINS             *msgarea-integrating-with-plugins*
+
+`msgarea.nvim` integrates with any plugin that exposes setting
+|api-win-config| fields somewhere in that plugin's config.
+
+Here are some examples:
+
+MiniPick ~
+To open all 'mini.pick' pickers in the message area: >lua
+
+  require("mini.pick").setup({
+    window = {
+      config = function()
+        return {
+          relative = package.loaded["msgarea"] and "msgarea" or nil,
+          border = { " ", " ", " ", " ", " ", " ", " ", " " },
+          height = 12,
+        },
+      end,
+    },
+  })
+<
+
+TODO: add more
+
+
+------------------------------------------------------------------------------
+API                                                                *msgarea-api*
+
+setup({user_config})                                           *msgarea.setup()*
+    Initialize the plugin.
+
+    Parameters:
+      {user_config} (`MsgArea.UserConfig?`): Configuration table.
+        See |msgarea-config| for more details.
+
+
+close_all()                                                *msgarea.close_all()*
+    Close all active msgarea windows.
+
+
+show({opts})                                                    *msgarea.show()*
+    Show or refresh the msgarea view.
+
+    Parameters: ~
+      {opts} (`MsgArea.View.ShowOpts?`) Options. Possible fields:
+        - <silent> (`boolean`) - suppress warning message
+        - <style> (`"msgarea"|"split"`) - show with this style
+        - <focused> (`integer`) - show with this winid focused
+        - <height> (`number`) - show with this height
+        - <cmdheight> (`integer`) - show with this cmdheight
+        - <flush> (`boolean`) - whether to show immediately flush
+          pending redraw (default is to schedule and batch refreshes)
+        - <winbar_min_tabs> (`integer`) - show with this `config.view.winbar_min_tabs`
+
+
+hide({opts})                                                    *msgarea.hide()*
+    Hide, but do not close, all msgarea windows.
+    Subsequent `require("msgarea").show()` will restore saved view state.
+
+    Parameters: ~
+      {opts} (`MsgArea.View.HideOpts?`) Options. Possible fields:
+        - <cmdheight> (`integer`) - set cmdheight to this after hiding
+
+
+  vim:tw=78:ts=8:ft=help:norl:
