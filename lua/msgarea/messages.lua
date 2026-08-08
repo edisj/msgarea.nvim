@@ -1,44 +1,17 @@
 local api = vim.api
-local ui = require("vim._core.ui2")
 local view = require("msgarea.view")
 local config = require("msgarea.config")
-local M = { msg_expanded = false }
-local internal = { buf = nil, win = nil }
+local util = require("msgarea.util")
 
+local M = { msg_expanded = false }
+local internal = {
+  bufs = { msgarea = nil, ephemeral = nil },
+  winid = nil,
+  ns = api.nvim_create_namespace("msgarea.messages"),
+}
 local WIN_ERROR = 0
 
 -- local in_confirm = false -- TODO: confirm
-
----Monkey-patched require("vim._core.ui2.messages").msg_show(...)
-M.msg_show = function(msg_show, kind, content, replace_last, history, append, id, trigger)
-  -- if kind == "confirm" then in_confirm = true end -- TODO: confirm
-
-  -- Match configured target mappings as Lua pattern to ID:
-  local k, v, id_target = next(type(id) == "string" and ui.cfg.msg.targets or {})
-  while k and not id_target do
-    id_target = id:match(k) and v
-    k, v = next(ui.cfg.msg.targets, k)
-  end
-
-  local in_pager = api.nvim_get_current_win() == ui.wins.pager
-  -- Set the entered search command in the cmdline (if available).
-  local tgt = kind == "search_cmd" and "cmd"
-    -- When the pager is open always route typed commands there. This better simulates
-    -- the UI1 behavior after opening the cmdline below a previous multiline message,
-    -- and seems useful enough even when the pager was entered manually.
-    or (trigger == "typed_cmd" and in_pager and vim.fn.getcmdwintype() == "") and "pager"
-    -- Otherwise route to configured target:
-    or (trigger ~= "" and ui.cfg.msg.targets[trigger])
-    or id_target
-    or (kind ~= "" and ui.cfg.msg.targets[kind])
-    or ui.cfg.msg.targets.default
-
-  if tgt == "msgarea" then
-    internal.show_message(kind, content, replace_last)
-  else -- fallback to original msg_show for all other targets
-    msg_show(kind, content, replace_last, history, append, id, trigger)
-  end
-end
 
 ---Monkey-patched require("vim._core.ui2.messages").expand_msg(...)
 M.expand_msg = function(expand_msg, src, tgt)
@@ -51,12 +24,12 @@ end
 ---Monkey-patched require("vim._core.ui2.messages").set_pos(...)
 M.set_pos = function(set_pos, tgt)
   if tgt == "pager" then
-    pcall(api.nvim_win_close, internal.win, true)
-    ui.msg.msg:clear()
+    view.close_safely(internal.winid)
+    util.msg_clear()
     view.hide({ cmdheight = view.original_cmdheight })
   end
 
-  -- TODO: confirm
+  -- TODO: confirm styling?
   -- if tgt == "dialog" and in_confirm then
   --   in_confirm = false
   --   vim.schedule(function()
@@ -78,14 +51,53 @@ M.set_pos = function(set_pos, tgt)
   set_pos(tgt)
 end
 
+---Monkey-patched require("vim._core.ui2.messages").show_msg(...)
+M.show_msg = function(show_msg, tgt, kind, content, replace_last, ...)
+  -- vim.notify(kind .. " -> " .. tgt)
+  if tgt ~= "msgarea" then
+    -- fallback to original show_msg for all other targets
+    show_msg(tgt, kind, content, replace_last, ...)
+    return
+  end
+
+  local title = kind and config.get().messages_title or nil
+  if type(title) == "function" then title = title(kind) end
+  local is_ephemeral = title == nil
+
+  local bufnr
+  if type(content) == "table" then
+    bufnr = internal.content_to_buf(content, is_ephemeral, replace_last)
+  else
+    bufnr = content
+  end
+
+  local winid, height, min_tabs
+  if is_ephemeral then
+    if view.in_ephemeral() then
+      local name = api.nvim_buf_get_name(bufnr)
+      title = name == "" and "[Scratch!!]" or name
+      height = math.min(api.nvim_buf_line_count(bufnr), vim.o.cmdheight) -- FIXME: how should this be decided?
+      min_tabs = math.huge
+    end
+    winid = internal.create_ephemeral_win(bufnr, title)
+  else
+    winid = internal.try_reuse_win(bufnr, title)
+  end
+  if winid ~= WIN_ERROR then
+    local opts = {
+      silent = true,
+      focused = winid,
+      -- height = height,
+      winbar_min_tabs = min_tabs,
+    }
+    view.show(opts)
+  end
+end
+
 
 -- internal helpers -----------------------------------------------------------
 
----Analagous to require("vim._core.ui2.messages").show_msg()
----@param kind string
----@param content MsgContent
----@param replace_last boolean
-internal.show_message = function(kind, content, replace_last)
+internal.content_to_buf = function(content, is_ephemeral, replace_last)
   local lines = {}
   local extmarks_to_apply = {}
 
@@ -123,70 +135,41 @@ internal.show_message = function(kind, content, replace_last)
       end
       start_col = start_col + #line
     end
-
   end
 
-  local title = config.get().messages_title
-  if type(title) == "function" then title = title(kind) end
-  local is_ephemeral = title == nil
-  local buf = is_ephemeral and internal.create_ephemeral_buf() or internal.ensure_msgarea_buf()
+  local bufnr = internal.try_reuse_buf(is_ephemeral and "ephemeral" or "msgarea")
+  vim.bo[bufnr].modifiable = true
+  -- TODO: need to look into semantics of replace last
+  -- local start = replace_last and -1 or 0
+  api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+  vim.bo[bufnr].modifiable = false
 
-  local min_tabs, height
-  if is_ephemeral and view.in_ephemeral() then
-    title = api.nvim_buf_get_name(buf)
-    height = math.min(#lines, vim.o.cmdheight) -- FIXME: how should this be decided?
-    min_tabs = 999
-  end
-
-  vim.bo[buf].modifiable = true
-  local start = replace_last and -1 or 0
-  api.nvim_buf_set_lines(buf, start, -1, false, lines)
-  vim.bo[buf].modifiable = false
-
-  local ns = api.nvim_create_namespace("msgarea.messages")
-  api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  api.nvim_buf_clear_namespace(bufnr, internal.ns, 0, -1)
   for _, extmark in ipairs(extmarks_to_apply) do
-    api.nvim_buf_set_extmark(buf, ns, extmark.row, extmark.start_col, {
+    api.nvim_buf_set_extmark(bufnr, internal.ns, extmark.row, extmark.start_col, {
       end_col = extmark.end_col,
       hl_group = extmark.hl_id,
     })
   end
 
-  local winid
-  if is_ephemeral then
-    winid = internal.create_ephemeral_win(buf, title)
-  else
-    winid = internal.ensure_msgarea_win(buf, title)
-  end
-  if winid ~= WIN_ERROR then
-    view.show({ silent = true, focused = winid, winbar_min_tabs = min_tabs, height = height })
-  end
+  return bufnr
 end
 
 ---@return integer
-local _create_buf = function()
-  local buf = api.nvim_create_buf(false, true)
+internal.try_reuse_buf = function(which)
+  local bufnr = internal.bufs[which]
+  if bufnr and api.nvim_buf_is_valid(bufnr) then return bufnr end
+
+  bufnr = api.nvim_create_buf(false, true)
   vim.keymap.set("n", "q", function()
     api.nvim_win_close(api.nvim_get_current_win(), true)
-  end, { buf = buf })
-  return buf
-end
+  end, { buf = bufnr })
 
----@return integer
-internal.ensure_msgarea_buf = function()
-  if internal.buf and api.nvim_buf_is_valid(internal.buf) then return internal.buf end
-  internal.buf = _create_buf()
-  api.nvim_buf_set_name(internal.buf, "[MsgArea]")
-  api.nvim_set_option_value("bufhidden", "hide", { buf = internal.buf, scope = "local" })
-  return internal.buf
-end
-
----@return integer
-internal.create_ephemeral_buf = function()
-  local buf = _create_buf()
-  api.nvim_set_option_value("bufhidden", "wipe", { buf = buf, scope = "local" })
-  api.nvim_buf_set_name(buf, "msgarea://" .. buf .. "/ephemeral")
-  return buf
+  local name = which == "ephemeral" and "msgarea://" .. bufnr .. "/ephemeral" or "[MsgArea]"
+  api.nvim_buf_set_name(bufnr, name)
+  api.nvim_set_option_value("bufhidden", "hide", { buf = bufnr, scope = "local" })
+  internal.bufs[which] = bufnr
+  return bufnr
 end
 
 local _win_set_wo = function(win)
@@ -210,9 +193,9 @@ end
 ---@param buf integer
 ---@param title string
 ---@return integer
-internal.ensure_msgarea_win = function(buf, title)
+internal.try_reuse_win = function(buf, title)
   local height = api.nvim_buf_line_count(buf) + (title and 1 or 0)
-  if internal.win and api.nvim_win_is_valid(internal.win) then
+  if internal.winid and api.nvim_win_is_valid(internal.winid) then
     for _, win_spec in ipairs(view.state.windows) do
       if win_spec.winid == internal.win then
         win_spec.height = height
@@ -222,18 +205,18 @@ internal.ensure_msgarea_win = function(buf, title)
     end
   else
     local win_cfg = { relative = "msgarea", style = "minimal", title = title, height = height }
-    internal.win = api.nvim_open_win(buf, false, win_cfg)
-    _win_set_wo(internal.win)
+    internal.winid = api.nvim_open_win(buf, false, win_cfg)
+    _win_set_wo(internal.winid)
   end
-  return internal.win
+  return internal.winid
 end
 
----@param buf integer
+---@param bufnr integer
 ---@param title? string
-internal.create_ephemeral_win = function(buf, title)
-  local height = api.nvim_buf_line_count(buf)
+internal.create_ephemeral_win = function(bufnr, title)
+  local height = api.nvim_buf_line_count(bufnr)
   local win_cfg = { relative = "msgarea", style = "minimal", title = title, height = height }
-  local winid = api.nvim_open_win(buf, false, win_cfg)
+  local winid = api.nvim_open_win(bufnr, false, win_cfg)
   if winid == WIN_ERROR then
     return WIN_ERROR
   else
@@ -243,9 +226,7 @@ internal.create_ephemeral_win = function(buf, title)
         once = true,
         group = api.nvim_create_augroup("msgarea.nvim-" .. tostring(winid), { clear = false }),
         pattern = tostring(view.state.windows.ephemeral.winid),
-        callback = function()
-          vim.schedule(function() pcall(api.nvim_win_close,winid, true) end)
-        end
+        callback = vim.schedule_wrap(function() view.close_safely(winid) end)
       }
       api.nvim_create_autocmd("WinClosed", autocmd_opts)
       return winid

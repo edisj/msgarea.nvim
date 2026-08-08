@@ -1,53 +1,184 @@
-local api = vim.api
-local fn = vim.fn
+local api, fn = vim.api, vim.fn
 local ui2 = require("vim._core.ui2")
-local M = {}
+local cache = require("msgarea.cache")
+local config = require("msgarea.config")
+local util = require("msgarea.util")
 
-local _augroup_name = "msgarea-nativecmp-autocmds"
+local M = {}
+local state = {
+  bufnr = nil,
+  winid = nil,
+  attached = false,
+  cache = {},
+  hide_pending = false,
+  hide_timer = nil,
+}
+
+local NS_UI = api.nvim_create_namespace("msgarea.integrations.native")
+local NS_SHOW = api.nvim_create_namespace("msgarea.integrations.native-cmp-show")
+local NS_SELECT = api.nvim_create_namespace("msgarea.integrations.native-cmp-select")
+
+-- for vim.fn.wildtrigger() emitting hide->show too quickly
+local HIDE_DELAY_MS = 10
+
+-- border for cmp menu window
+local BORDER = { "", "", "", " ", "", "", "", " " }
+
+local get_lines_and_matches = function(items)
+  local type = fn.getcmdcompltype()
+  local pat = fn.getcmdcomplpat()
+  local key = type .. "\0" .. pat
+  local cached = state.cache[key]
+  if cached then return cached.lines, cached.matches, cached.label_col_width end
+
+  local lines, matches, label_col_width = {}, {}, 0
+  for i, item in ipairs(items) do
+    local word = item[1]
+    lines[i] = word
+    matches[i] = fn.matchfuzzypos({ word }, pat)[2][1]
+    if #word > label_col_width then label_col_width = #word end
+  end
+  state.cache[key] = { lines = lines, matches = matches, label_col_width = label_col_width }
+  return lines, matches, label_col_width
+end
+
+local win_valid = function()
+  return state.winid and api.nvim_win_is_valid(state.winid)
+end
+
+local try_update_height = util.throttled(function(height)
+  if not win_valid() then return end
+  local win_cfg = { relative = "msgarea", height = height, border = BORDER }
+  api.nvim_win_set_config(state.winid, win_cfg)
+end)
+
+local get_height = function(n_items)
+  local dynamic = config.get().cmdline.dynamic_height
+  return dynamic and math.min(n_items, vim.o.pumheight) or vim.o.pumheight
+end
+
+M.popupmenu_show = function(items)
+  state.hide_pending = false
+
+  local lines, matches, label_col_width = get_lines_and_matches(items)
+  api.nvim_buf_set_lines(state.bufnr, 0, -1, false, lines)
+
+  if not (win_valid()) then
+    local win_cfg = {
+      border = BORDER,
+      style = "minimal",
+      relative = "msgarea",
+      height = get_height(#lines),
+      focusable = false
+    }
+    state.winid = api.nvim_open_win(state.bufnr, false, win_cfg)
+  else
+    try_update_height(get_height(#lines))
+  end
+
+  api.nvim_buf_clear_namespace(state.bufnr, NS_SHOW, 0, -1)
+  local set_extmark = function(lnum, col, extmark_opts)
+    api.nvim_buf_set_extmark(state.bufnr, NS_SHOW, lnum-1, col, extmark_opts)
+  end
+
+  local include_desc = config.get().cmdline.descriptions and fn.getcmdcompltype() == "command"
+  for i, word in ipairs(lines) do
+    if include_desc then
+      local desc = cache.excmds[word] or cache.usercmds[word] or ""
+      set_extmark(i, 0, {
+        virt_text = {{ desc, "MsgAreaCmpLabelDescription" }},
+        virt_text_win_col = label_col_width + 4,
+        hl_mode= "combine",
+      })
+    end
+    if matches[i] then
+      for _, scol in ipairs(matches[i]) do
+        local opts = { end_col = scol + 1, hl_group = "PmenuMatch", hl_mode = "combine" }
+        set_extmark(i, scol, opts)
+      end
+    end
+  end
+end
+
+M.popupmenu_select = function(selected)
+  api.nvim_buf_clear_namespace(state.bufnr, NS_SELECT, 0, -1)
+  if selected == -1 then return end
+
+  api.nvim_buf_set_extmark(state.bufnr, NS_SELECT, selected, 0, {
+    line_hl_group = "PmenuSel",
+    hl_mode = "combine",
+  })
+  api.nvim_win_set_cursor(state.winid, { selected + 1, 0 })
+end
+
+M.popupmenu_hide = function()
+  state.hide_pending = true
+  if (state.hide_timer and not state.hide_timer:is_closing()) then
+    state.hide_timer:close()
+  end
+  -- NOTE: every vim.fn.wildtrigger() seems to emit
+  -- popupmenu_hide -> popupmenu_show, but they seem NOT to be
+  -- synchronous so a simple vim.schedule(check if should hide) doesn't
+  -- work. That's why I'm using a timer instead
+  state.hide_timer = vim.defer_fn(vim.schedule_wrap(function()
+    if not (state.hide_pending and win_valid() and fn.mode() == "c") then
+      return
+    end
+    state.hide_pending = false
+    api.nvim_win_close(state.winid, true)
+    if config.get().cmdline.dynamic_height or fn.getcmdline() == "" then
+      vim.o.cmdheight = 1
+    end
+  end), HIDE_DELAY_MS)
+end
+
+local attach = vim.schedule_wrap(function()
+  if fn.mode() ~= "c" then return end
+  local buf = api.nvim_create_buf(false, true)
+  api.nvim_set_option_value("filetype", "native-cmp-menu", { scope = "local", buf = buf })
+  api.nvim_buf_set_name(buf, "msgarea://" .. buf .. "native-cmp-menu")
+  state.bufnr = buf
+  state.attached = true
+  vim.ui_attach(NS_UI, { ext_popupmenu = true }, function(event, ...)
+    local handler = M[event]
+    if handler then handler(...) end
+  end)
+end)
+
+local detach = vim.schedule_wrap(function()
+  if state.bufnr and api.nvim_buf_is_valid(state.bufnr) then
+    api.nvim_buf_delete(state.bufnr, { force = true })
+  end
+  if ui2.cmd.prompt or not state.attached then return end
+  state.bufnr, state.winid, state.attached, state.cache = nil, nil, false, {}
+  -- need to schedule this
+  -- see https://github.com/neovim/neovim/discussions/32094#discussioncomment-11878489
+  vim.ui_detach(NS_UI)
+end)
+
+local id
 local setup_autocmds = function()
-  local group = api.nvim_create_augroup(_augroup_name, { clear = true })
+  id = api.nvim_create_augroup("msgarea-nativecmp-autocmds", { clear = true })
   local on = function(event, pattern, desc, cb)
     api.nvim_create_autocmd(event, {
-      group = group,
+      group = id,
       pattern = pattern,
-      desc = desc,
+      desc = "(msgarea.nvim) " .. desc,
       callback = cb,
     })
   end
-
-  local _pumheight = vim.o.pumheight
-  local _pumwidth = vim.o.pumwidth
-  local _pummaxwidth = vim.o.pummaxwidth
-  -- on("CmdlineEnter", "*", "", function(ev)
-  --   local width = api.nvim_win_get_width(ui2.wins.cmd)
-  --   vim.o.pumwidth = width
-  --   vim.o.pummaxwidth = width
-  -- end)
-  -- on("CmdlineLeave", "*", "", function()
-  --   vim.o.pumwidth = _pumwidth
-  --   vim.o.pummaxwidth = _pummaxwidth
-  -- end)
-
-  -- on("CmdlineChanged", { ":", "/", "?" }, "", function()
-  --   fn.wildtrigger()
-  --   vim.schedule(function()
-  --     local ok, items = pcall(fn.getcompletion, fn.getcmdcomplpat(), fn.getcmdcompltype())
-  --     local n = ok and #items or 0
-  --     local cap = vim.o.pumheight > 0 and vim.o.pumheight or math.huge
-  --     local h = math.min(n, cap)
-  --     vim.o.cmdheight = (h > 0 and h or 0) + 1
-  --     vim.cmd.redraw()
-  --   end)
-  -- end)
-
+  on("CmdlineEnter", { ":", "/", "\\?" }, "", attach)
+  on("CmdlineLeave", "*", "", detach)
 end
 
 M.enable = function()
   setup_autocmds()
+  if config.get().cmdline.descriptions then cache.refresh() end
 end
 
 M.disable = function()
-  api.nvim_del_augroup_by_name(_augroup_name)
+  detach()
+  pcall(api.nvim_del_augroup_by_id, id)
 end
 
 return M

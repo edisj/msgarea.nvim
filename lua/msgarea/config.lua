@@ -1,8 +1,8 @@
 ---@type Msgarea.Config
 local default_config = {
   -- Whether to enable the plugin. Can be disabled at runtime
-  -- with `require("msgarea").config({ enabled = false })`
-  enabled = true,
+  -- with `require("msgarea").config({ enable = false })`
+  enable = true,
 
   -- List of message `kind`s that should be sent to the msgarea
   -- NOTE: equivalent to setting <kind> = "msgarea" in ui2.cfg.msg.targets
@@ -15,7 +15,7 @@ local default_config = {
   msgarea_targets = {},
 
   -- Title for persistent messages in message area
-  -- These messages are routed through `<target> = "msgarea"` in ui2 config.
+  -- These messages are routed through `<kind> = "msgarea"` in ui2 config.
   -- Can either be:
   --   string   - A static title to use for all messages.
   --   function - A callable that receives parameter `kind` (:h ui-messages)
@@ -37,10 +37,6 @@ local default_config = {
     --   msgarea - Open below statusline in the message area.
     --   split   - Open as a regular "below" split.
     style = "msgarea",
-    -- While in cmdline, the view is shifted to this position.
-    style_while_in_cmdline = "split",
-    -- While an ephemeral window is open, view is shifted to this position.
-    style_while_in_ephemeral_win = "split",
 
     -- Min and max height of the view, if fraction between 0-1,
     -- it is % of editor size, otherwise absolute size
@@ -65,13 +61,16 @@ local default_config = {
     -- Whether to enable cmdline completion behaviors.
     -- If using an external cmdline like `tiny-cmdline.nvim`,
     -- you probably want to disable this.
-    enabled = false,
+    enable = false,
 
     -- Which completion plugin you use.
-    -- Currently only `blink.cmp` is supported... working on native
     -- Valid providers:
-    --   "blink.cmp"
-    cmp_provider = "blink.cmp",
+    --   "native"       - builtin cmdline completions
+    --   "blink.cmp"    - https://github.com/saghen/blink.cmp
+    --   "mini.cmdline" - https://github.com/nvim-mini/mini.cmdline
+    cmp_provider = "native",
+
+    max_height = vim.o.pumheight,
 
     -- Whether to dynamically resize cmdheight as completion window changes height.
     -- If `false`, the height is set to `vim.o.pumheight`, otherwise
@@ -110,9 +109,9 @@ end
 
 local is_integer = function(value)
   return type(value) == "number"
-    and value == math.floor(value)
-    and value ~= math.huge
-    and value ~= -math.huge
+         and value == math.floor(value)
+         and value ~= math.huge
+         and value ~= -math.huge
 end
 
 ---Validate user config options.
@@ -144,15 +143,12 @@ M.setup = function(user_config)
 
   local errors = {}
 
-  errors[#errors + 1] = validate("enabled", config.enabled, "boolean")
+  errors[#errors + 1] = validate("enable", config.enable, "boolean")
   errors[#errors + 1] = validate("msgarea_targets", config.msgarea_targets, "table")
   errors[#errors + 1] = validate("messages_title", config.messages_title, { "string", "function" })
 
-  local VALID_STYLES = { "msgarea", "split" }
   for field, expected in pairs {
-    style = VALID_STYLES,
-    style_while_in_cmdline = VALID_STYLES,
-    style_while_in_ephemeral_win = VALID_STYLES,
+    style = { "msgarea", "split" },
     min_height = "number",
     max_height = "number",
     winbar_pos = { "left", "center", "right" },
@@ -162,9 +158,8 @@ M.setup = function(user_config)
   end
 
   for field, expected in pairs {
-    enabled = "boolean",
-    -- cmp_provider = { "native", "blink.cmp" }, TODO: native
-    cmp_provider = { "blink.cmp" },
+    enable = "boolean",
+    cmp_provider = { "native", "blink.cmp", "mini.cmdline" },
     descriptions = "boolean",
     dynamic_height = "boolean",
     resize_throttle_ms = "number",
@@ -181,16 +176,14 @@ M.setup = function(user_config)
 end
 
 ---@class (exact) Msgarea.UserConfig : Msgarea.Config
----@field enabled? boolean
+---@field enable? boolean
+---@field msgarea_targets? string[]
 ---@field messages_title? string|fun(kind?: string):string
 ---@field view? Msgarea.Config.ViewPartial
 ---@field cmdline? Msgarea.Config.CmdlinePartial
----@field msgarea_targets? string[]
 
 ---@class (exact) Msgarea.Config.ViewPartial : Msgarea.Config.View
 ---@field style? "msgarea"|"split"
----@field style_while_in_cmdline? "msgarea"|"split"
----@field style_while_in_ephemeral_win? "msgarea"|"split"
 ---@field max_height? number
 ---@field min_height? number
 ---@field winbar_pos? "left"|"center"|"right"
@@ -198,23 +191,21 @@ end
 ---@field winbar_min_tabs? integer
 
 ---@class (exact) Msgarea.Config.CmdlinePartial : Msgarea.Config.Cmdline
----@field enabled? boolean
----@field cmp_provider? "native"|"blink.cmp"
----@field descriptions? boolean
+---@field enable? boolean
+---@field cmp_provider? "native"|"blink.cmp"|"mini.cmdline"
 ---@field dynamic_height? boolean
 ---@field resize_throttle_ms? number
+---@field descriptions? boolean
 
 ---@class (exact) Msgarea.Config
----@field enabled boolean
----@field messages_title string|fun(kind?:string):string
+---@field enable boolean
 ---@field msgarea_targets string[]
+---@field messages_title string|fun(kind?:string):string
 ---@field view Msgarea.Config.View
 ---@field cmdline Msgarea.Config.Cmdline
 
 ---@class (exact) Msgarea.Config.View
 ---@field style "msgarea"|"split"
----@field style_while_in_cmdline "msgarea"|"split"
----@field style_while_in_ephemeral_win "msgarea"|"split"
 ---@field max_height number
 ---@field min_height number
 ---@field winbar_pos "left"|"center"|"right"
@@ -222,10 +213,10 @@ end
 ---@field winbar_min_tabs integer
 
 ---@class (exact) Msgarea.Config.Cmdline
----@field enabled boolean
----@field cmp_provider "native"|"blink.cmp"
----@field descriptions boolean
+---@field enable boolean
+---@field cmp_provider "native"|"blink.cmp"|"mini.cmdline"
 ---@field dynamic_height boolean
 ---@field resize_throttle_ms number
+---@field descriptions boolean
 
 return M

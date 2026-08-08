@@ -1,17 +1,22 @@
 local M = {}
 
-M.show = function(opts)
-  require("msgarea.view").show(opts)
+---Show or refresh the msgarea view.
+M.show = function()
+  require("msgarea.view").show()
 end
 
+---Hide, but do not close, all msgarea windows.
+---Subsequent `require("msgarea").show()` will restore saved view state.
 M.hide = function()
   require("msgarea.view").hide()
 end
 
+---Close all msgarea windows and reset state.
 M.close_all = function()
   require("msgarea.view").close_all()
 end
 
+---Initialize the plugin.
 ---@param user_config Msgarea.UserConfig
 M.setup = function(user_config)
   local ok, merged_config = require("msgarea.config").setup(user_config or {})
@@ -25,16 +30,16 @@ M.setup = function(user_config)
   end
 
   require("msgarea.setup.autocmds").setup(merged_config)
-  require("msgarea.setup.highlights").setup(merged_config)
   require("msgarea.setup.runtime_patches").setup(merged_config)
+  require("msgarea.setup.highlights").setup()
 
   local cmdline = merged_config.cmdline
-  if merged_config.enabled and cmdline.enabled then
-    if cmdline.cmp_provider == "blink.cmp" then
+  if merged_config.enable and cmdline.enable then
+    local provider = cmdline.cmp_provider
+    if provider == "blink.cmp" then
       require("msgarea.integrations.blink").enable()
-    -- TODO: native
-    -- else
-    --   require("msgarea.integrations.native").enable()
+    elseif provider == "native" or provider == "mini.cmdline" then
+      require("msgarea.integrations.native").enable()
     end
   else
     pcall(function() require("msgarea.integrations.blink").disable() end)
@@ -43,14 +48,11 @@ M.setup = function(user_config)
   local ui2_targets = require("vim._core.ui2").cfg.msg.targets
   for _, target in ipairs(merged_config.msgarea_targets) do
     ---@diagnostic disable-next-line: assign-type-mismatch
-    ui2_targets[target] = merged_config.enabled and "msgarea" or nil
+    ui2_targets[target] = merged_config.enable and "msgarea" or nil
   end
 end
 
 ---alias for `setup()`
----@param user_config Msgarea.UserConfig
-M.config = function(user_config)
-  M.setup(user_config)
-end
+M.config = M.setup
 
 return M

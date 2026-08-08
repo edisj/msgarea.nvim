@@ -6,6 +6,7 @@ local ui2 = require("vim._core.ui2")
 local _msg_show = ui2.msg.msg_show
 local _set_pos = ui2.msg.set_pos
 local _expand_msg = ui2.msg.expand_msg
+local _show_msg = ui2.msg.show_msg
 
 local M = {}
 
@@ -13,7 +14,7 @@ M.setup = function(config)
   local view = require("msgarea.view")
   local messages = require("msgarea.messages")
 
-  if not config.enabled then
+  if not config.enable then
     api.nvim_open_win = _nvim_open_win
     api.nvim_win_set_config = _nvim_win_set_config
     ui2.msg.msg_show = _msg_show
@@ -40,8 +41,12 @@ M.setup = function(config)
     end
   end
 
-  ui2.msg.msg_show = function(...)
-    messages.msg_show(_msg_show, ...)
+  -- ui2.msg.msg_show = function(...)
+  --   messages.msg_show(_msg_show, ...)
+  -- end
+
+  ui2.msg.show_msg = function(...)
+    messages.show_msg(_show_msg, ...)
   end
 
   ui2.msg.set_pos = function(...)

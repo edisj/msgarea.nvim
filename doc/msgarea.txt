@@ -333,32 +333,27 @@ setup({user_config})                                           *msgarea.setup()*
         See |msgarea-config| for more details.
 
 
+config({user_config})                                         *msgarea.config()*
+    Configure plugin. (alias for setup)
+
+    Parameters:
+      {user_config} (`MsgArea.UserConfig?`): Configuration table.
+        See |msgarea-config| for more details.
+
+
+show()                                                          *msgarea.show()*
+    Show or refresh the msgarea view.
+
+
+hide()                                                          *msgarea.hide()*
+    Hide, but do not close, all msgarea windows.
+    Subsequent `require("msgarea").show()` will restore saved view state.
+
+
 close_all()                                                *msgarea.close_all()*
     Close all active msgarea windows.
 
 
-show({opts})                                                    *msgarea.show()*
-    Show or refresh the msgarea view.
-
-    Parameters: ~
-      {opts} (`MsgArea.View.ShowOpts?`) Options. Possible fields:
-        - <silent> (`boolean`) - suppress warning message
-        - <style> (`"msgarea"|"split"`) - show with this style
-        - <focused> (`integer`) - show with this winid focused
-        - <height> (`number`) - show with this height
-        - <cmdheight> (`integer`) - show with this cmdheight
-        - <flush> (`boolean`) - whether to show immediately flush
-          pending redraw (default is to schedule and batch refreshes)
-        - <winbar_min_tabs> (`integer`) - show with this `config.view.winbar_min_tabs`
-
-
-hide({opts})                                                    *msgarea.hide()*
-    Hide, but do not close, all msgarea windows.
-    Subsequent `require("msgarea").show()` will restore saved view state.
-
-    Parameters: ~
-      {opts} (`MsgArea.View.HideOpts?`) Options. Possible fields:
-        - <cmdheight> (`integer`) - set cmdheight to this after hiding
 
 
   vim:tw=78:ts=8:ft=help:norl:
