@@ -79,103 +79,105 @@ CONFIG                                                          *msgarea-config*
 
 Defaults ~
 >lua
-  {
-    -- Whether to enable the plugin. Can be disabled at runtime
-    -- with `require("msgarea").config({ enabled = false })`
-    enabled = true,
+ {
+  -- Whether to enable the plugin. Can be disabled at runtime
+  -- with `require("msgarea").config({ enable = false })`
+  enable = true,
 
-    -- List of message `kind`s that should be sent to the msgarea
-    -- NOTE: equivalent to setting <kind> = "msgarea" in ui2.cfg.msg.targets
-    -- Valid message kinds:
-    --   - "lua_print"
-    --   - "lua_error"
-    --   - "list_cmd"
-    --   - ...
-    -- (see :h ui-messages for all valid kinds)
-    msgarea_targets = {},
+  -- List of message `kind`s that should be sent to the msgarea
+  -- NOTE: equivalent to setting <kind> = "msgarea" in ui2.cfg.msg.targets
+  -- Valid message kinds:
+  --   - "lua_print"
+  --   - "lua_error"
+  --   - "list_cmd"
+  --   - ...
+  -- (see :h ui-messages for all valid kinds)
+  msgarea_targets = {},
 
-    -- Title for persistent messages in message area
-    -- These messages are routed through `<target> = "msgarea"` in ui2 config.
-    -- Can either be:
-    --   string   - A static title to use for all messages.
-    --   function - A callable that receives parameter `kind` (:h ui-messages)
-    --              and returns a string or `nil`.
-    --              If return is `nil`, message is treated as ephemeral.
-    -- For example, to treat `lua_print` and `lua_error` kinds as persistent
-    -- and everything else as ephemeral:
-    --   function(kind)
-    --     local titles = { lua_print = " Lua Print ", lua_error = " Lua Error " }
-    --     return titles[kind]
-    --   end
-    messages_title = " Messages ",
+  -- Title for persistent messages in message area
+  -- These messages are routed through `<kind> = "msgarea"` in ui2 config.
+  --
+  -- Can either be:
+  --   string   - A static title to use for all messages.
+  --   function - A callable that receives parameter `kind` (:h ui-messages)
+  --              and returns a string or `nil`.
+  --              If return is `nil`, message is treated as ephemeral.
+  --
+  -- Examples:
+  --   - to treat `lua_print` and `lua_error` kinds as persistent
+  --     and everything else as ephemeral:
+  --       message_title = function(kind)
+  --         local titles = { lua_print = " Lua Print ", lua_error = " Lua Error " }
+  --         return titles[kind]
+  --       end
+  --   - to make every message persistent with a static title:
+  --       message_title = " Messages "
+  message_title = function(kind) end,
 
-    -- View options
-    view = {
-      -- Determines whether to place the view below statusline
-      -- or as a regular split.
-      -- Valid styles are:
-      --   msgarea - Open below statusline in the message area.
-      --   split   - Open as a regular "below" split.
-      style = "msgarea",
-      -- While in cmdline, the view is shifted to this position.
-      style_while_in_cmdline = "split",
-      -- While an ephemeral window is open, view is shifted to this position.
-      style_while_in_ephemeral_win = "split",
+  -- View options
+  view = {
+    -- Determines whether to place the view below statusline
+    -- or as a regular split.
+    -- Valid styles are:
+    --   msgarea - Open below statusline in the message area.
+    --   split   - Open as a regular "below" split.
+    style = "msgarea",
 
-      -- Min and max height of the view, if fraction between 0-1,
-      -- it is % of editor size, otherwise absolute size
-      min_height = 1,
-      max_height = 0.3,
+    -- Min and max height of the view, if fraction between 0-1,
+    -- it is % of editor size, otherwise absolute size
+    min_height = 1,
+    max_height = 0.3,
 
-      -- Determines position of tabs in winbar.
-      -- Analagous to `title_pos` in win config (:h nvim_open_win())
-      -- Valid positions are: "left" | "center" | "right"
-      winbar_pos = "left",
+    -- Determines position of tabs in winbar.
+    -- Analagous to `title_pos` in win config (:h nvim_open_win())
+    -- Valid positions are: "left" | "center" | "right"
+    winbar_pos = "left",
 
-      -- Optional separator between tabs in winbar.
-      winbar_separator = "",
+    -- Optional separator between tabs in winbar.
+    winbar_separator = "",
 
-      -- Minimum number of msgarea windows needed to show tabs.
-      -- e.g. if 2, then tab is hidden when only a single window is open.
-      winbar_min_tabs = 1,
-    },
+    -- Minimum number of msgarea windows needed to show tabs.
+    -- e.g. if 2, then tab is hidden when only a single window is open.
+    winbar_min_tabs = 1,
+  },
 
-    -- Cmdline completion options
-    cmdline = {
-      -- Whether to enable cmdline completion behaviors.
-      -- If using an external cmdline like `tiny-cmdline.nvim`,
-      -- you probably want to disable this.
-      enabled = false,
+  -- Cmdline completion options
+  cmdline = {
+    -- Whether to enable cmdline completion behaviors.
+    -- If using an external cmdline like `tiny-cmdline.nvim`,
+    -- you probably want to disable this.
+    enable = false,
 
-      -- Which completion plugin you use.
-      -- Currently only `blink.cmp` is supported... working on native
-      -- Valid providers:
-      --   "blink.cmp"
-      cmp_provider = "blink.cmp",
+    -- Which completion plugin you use.
+    -- Valid providers:
+    --   "native"       - builtin cmdline completions
+    --   "mini.cmdline" - https://github.com/nvim-mini/mini.cmdline
+    --   "blink.cmp"    - https://github.com/saghen/blink.cmp
+    cmp_provider = "native",
 
-      -- Whether to dynamically resize cmdheight as completion window changes height.
-      -- If `false`, the height is set to `vim.o.pumheight`, otherwise
-      -- `vim.o.pumheight` is used as the max height.
-      dynamic_height = true,
+    -- Whether to dynamically resize cmdheight as completion window changes height.
+    -- If `false`, the height is set to `vim.o.pumheight`, otherwise
+    -- `vim.o.pumheight` is used as the max height.
+    dynamic_height = false,
 
-      -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
-      -- will cause the the cmdheight to bounce rapidly.
-      -- If `dynamic_height = false` then this has no effect.
-      resize_throttle_ms = 200,
+    -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
+    -- will cause the the cmdheight to bounce rapidly.
+    -- If `dynamic_height = false` then this has no effect.
+    resize_throttle_ms = 200,
 
-      -- Whether to add description text to cmdline completions.
-      -- For ex-cmds, parsed directly from `index.txt` (:h ex-cmds-index),
-      -- for usercmds, obtained from `vim.api.nvim_get_commands({})`.
-      -- Notes:
-      --   - If you find some usercmds are missing descriptions, they may have
-      --     been lazy loaded after cache was populated.
-      --     Call `require("msgarea.cache").refresh()` to repopulate cache at any time.
-      --   - If using `blink.cmp` and you are not seeing descriptions, make sure in
-      --     your bilnk config, `cmdline.completion.menu.draw.columns` includes "label_description".
-      --   - Subject to change depending on https://github.com/neovim/neovim/pull/39672
-      descriptions = true,
-    },
-  }
+    -- Whether to add description text to cmdline completions.
+    -- For ex-cmds, parsed directly from `index.txt` (:h ex-cmds-index),
+    -- for usercmds, obtained from `vim.api.nvim_get_commands({})`.
+    -- Notes:
+    --   - If you find some usercmds are missing descriptions, they may have
+    --     been lazy loaded after cache was populated.
+    --     Call `require("msgarea.cache").refresh()` to repopulate cache at any time.
+    --   - If using `blink.cmp` and you are not seeing descriptions, make sure in
+    --     your bilnk config, `cmdline.completion.menu.draw.columns` includes "label_description".
+    --   - Subject to change depending on https://github.com/neovim/neovim/pull/39672
+    descriptions = true,
+  },
+}
 <
 
 ------------------------------------------------------------------------------
