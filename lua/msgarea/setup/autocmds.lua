@@ -5,49 +5,27 @@ local view = require("msgarea.view")
 local messages = require("msgarea.messages")
 local M = {}
 
-local id
-M.setup = function(config)
-  if not config.enabled then
-    pcall(api.nvim_del_augroup_by_id, id)
-    return
-  end
+-- NOTE: `skip_refresh` only exists to fix annoying behavior when pressing
+-- keymaps that use ":" for <Cmd>, for example %
+-- Cursor still bounces to cmdline... not sure how to fix
+local skip_refresh = false
 
-  id = vim.api.nvim_create_augroup("msgarea.autocmds", { clear = true })
-  local on = function(event, pattern, desc, cb)
-    local opts = { group = id, pattern = pattern, desc = "(msgarea.nvim) " .. desc, callback = cb }
-    api.nvim_create_autocmd(event, opts)
-  end
+local saved_ephemeral_state
+local saved_ephemeral_idx
+local prev_focused
 
-  do
-    local desc = "refresh height of active windows on cmdheight change"
-    local refresh_heights = function()
-      if
-        fn.mode() == "c"
-        or view.style() == "split"
-        or vim.v.option_new == vim.v.option_old
-      then
-        return
-      end
-      local h = vim.v.option_new
-      for _, win_spec in ipairs(view.state.windows) do
-        if api.nvim_win_is_valid(win_spec.winid) then
-          h = h - win_spec.border_height
-          api.nvim_win_set_height(win_spec.winid, h)
-        end
-      end
-    end
-    on("OptionSet", "cmdheight", desc, refresh_heights)
-  end
-
-  do
-    -- NOTE: this occurs if, for example, you press a keymap to focus a msgarea window
-    -- and that is not the currently focused window in require("msgarea.view").state.focused
-    local desc = "ensure msgarea window is focused when entered"
-    local ensure_focused = function(ev)
+local autocmds = {
+  {
+    ev = "WinEnter",
+    desc = "ensure msgarea window is focused when entered",
+    pattern = "*",
+    cb = function(ev)
+      -- NOTE: this occurs if, for example, you press a keymap to focus a msgarea window
+      -- and that is not the currently focused window in require("msgarea.view").state.focused
       local winid
-      for _, win in ipairs(view.state.windows) do
-        if win.bufnr == ev.buf then
-          winid = win.winid
+      for _, win_spec in ipairs(view.get_state().windows) do
+        if win_spec.bufnr == ev.buf then
+          winid = win_spec.winid
           break
         end
       end
@@ -58,84 +36,134 @@ M.setup = function(config)
       then
         return
       end
-      view.show({ flush = true, silent = true, focused = winid })
-    end
-    on("WinEnter", "*", desc, ensure_focused)
-  end
-
-  local in_prompt = function()
-    -- NOTE: it may be preferrable to use getcmdtype() or getcmdprompt() instead...
-    -- not sure about if there will be issues with async ordering
-    return ui2.cmd.prompt
-  end
-
-  local in_pager = function()
-    return api.nvim_get_current_win() == ui2.wins.pager
-  end
-
-  do
-    local desc = "hide msgarea when entering any prompt"
-    local hide_msgarea_in_prompt = function() view.hide() end
-    -- @ means input()
-    -- - means confirm() or inputlist() or :s///c
-    on("CmdlineEnter", { "@", "-" }, desc, hide_msgarea_in_prompt)
-  end
-
-  -- NOTE: `skip_refresh` only exists to fix annoying behavior when pressing
-  -- keymaps that use ":" for <Cmd>, for example %
-  -- Cursor still bounces to cmdline... not sure how to fix
-  local skip_refresh = false
-
-  do
-    local desc = "refresh msgarea style on CmdlineEnter"
-    local refresh_msgarea = vim.schedule_wrap(function()
-      -- NOTE: this check is still needed even though we filter out the
-      -- "@" and "-" patterns because here we're scheduling the refresh.
-      -- For example, calling `:restart` with unsaved changes will trigger a
-      -- CmdlineEnter event, the refresh will be scheduled, and THEN the confirm()
-      -- prompt will trigger it's own CmdlineEnter refresh, at which point the
-      -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
-      if in_prompt() then return end
-      if fn.mode() ~= "c" then skip_refresh = true; return end
-      local cmdheight = config.view.style_while_in_cmdline == "split" and 1 or nil
-      view.show({ silent = true, cmdheight = cmdheight })
-    end)
-    on("CmdlineEnter", { ":", "/", "\\?" }, desc, refresh_msgarea)
-  end
-
-  do
-    local desc = "refresh msgarea style on CmdlineLeave"
-    local refresh_msgarea = vim.schedule_wrap(function()
+      view.show({ silent = true, focused = winid })
+    end,
+  },
+  {
+    ev = "WinLeave",
+    desc = "refresh mesgarea when leaving pager",
+    pattern = "*",
+    cb = function(ev)
+      if ev.buf == ui2.bufs.pager then view.show({ silent = true }) end
+    end,
+  },
+  {
+    ev = "OptionSet",
+    desc = "refresh height of active windows on cmdheight change",
+    pattern = "cmdheight",
+    cb = function()
+      if
+        fn.mode() == "c"
+        or view.style() == "split"
+        or vim.v.option_new == vim.v.option_old
+      then
+        return
+      end
+      local h = vim.v.option_new
+      for _, win_spec in ipairs(view.state.windows) do
+        if api.nvim_win_is_valid(win_spec.winid) then
+          h = h - win_spec.bheight
+          api.nvim_win_set_height(win_spec.winid, h)
+        end
+      end
+    end,
+  },
+  {
+    ev = "QuitPre",
+    desc = "close msgarea before quitting",
+    pattern = "*",
+    cb = function()
+      view.close_all()
+    end,
+  },
+  {
+    ev = "CmdlineEnter",
+    desc = "refresh msgarea state on cmdline enter",
+    pattern = "*",
+    cb = function(ev)
+      if ev.match == "@" or ev.match == "-" then
+        -- FIXME: why does confirm bug out sometimes and not render correctly?
+        view.hide({ cmdheight = 0 })
+      else
+        local eph, focused, height = view.state.windows.ephemeral, nil, nil
+        if eph then
+          if api.nvim_get_current_win() ~= eph.winid then
+            view.close_ephemeral(1)
+          else
+            prev_focused = view.state.focused
+            saved_ephemeral_state, saved_ephemeral_idx = eph, #view.state.windows + 1
+            view.state.windows[saved_ephemeral_idx] = saved_ephemeral_state
+            view.state.windows.ephemeral = nil
+            focused = saved_ephemeral_state.winid
+            height = api.nvim_buf_line_count(saved_ephemeral_state.bufnr)
+          end
+        end
+        vim.schedule(function()
+          -- NOTE: this check is still needed even though we filter out the
+          -- "@" and "-" patterns because here we're scheduling the refresh.
+          -- For example, calling `:restart` with unsaved changes will trigger a
+          -- CmdlineEnter event, the refresh will be scheduled, and THEN the confirm()
+          -- prompt will trigger it's own CmdlineEnter refresh, at which point the
+          -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
+          if ui2.cmd.prompt then return end
+          if fn.mode() ~= "c" then skip_refresh = true; return end
+          view.show({ silent = true, cmdheight = 1, focused = focused, height = height })
+        end)
+      end
+    end,
+  },
+  {
+    ev = "CmdlineLeave",
+    desc = "refresh msgarea state on cmdline leave",
+    pattern = "*",
+    cb = function()
       if messages.msg_expanded then
         api.nvim_create_autocmd("CursorMoved", {
           once = true,
           callback = function()
             messages.msg_expanded = false
-            if not in_pager() then view.show({ silent = true }) end
+            if not (api.nvim_get_current_win() == ui2.wins.pager) then
+              view.show({ silent = true })
+            end
           end
         })
       else
-        if in_prompt() or in_pager() then return end
-        if skip_refresh then skip_refresh = false; return end
-        view.show({ silent = true })
+        vim.schedule(function()
+          if ui2.cmd.prompt or (api.nvim_get_current_win() == ui2.wins.pager) then return end
+          if skip_refresh then skip_refresh = false; return end
+
+          local focused
+          if saved_ephemeral_state then
+            focused = prev_focused
+            table.remove(view.state.windows, saved_ephemeral_idx)
+            if api.nvim_win_is_valid(saved_ephemeral_state.winid) then
+              view.state.windows.ephemeral = saved_ephemeral_state
+            end
+            saved_ephemeral_state, saved_ephemeral_idx, prev_focused = nil, nil, nil
+          end
+          view.show({ silent = true, focused = focused })
+        end)
       end
-    end)
-    on("CmdlineLeave", "*" , desc, refresh_msgarea)
-  end
+    end,
+  },
+}
 
-  do
-    local desc = "refresh mesgarea when leaving pager"
-    local refresh_msgarea = function(ev)
-      if ev.buf == ui2.bufs.pager then view.show({ flush = true, silent = true }) end
-    end
-    on("WinLeave", "*", desc, refresh_msgarea)
+local id -- augroup id
+M.setup = function(config)
+  if not config.enable then
+    pcall(api.nvim_del_augroup_by_id, id)
+    return
   end
-
-  do
-    local desc = "close msgarea before quitting"
-    on("QuitPre", "*", desc, function() view.close_all() end)
+  id = vim.api.nvim_create_augroup("msgarea.autocmds", { clear = true })
+  for _, autocmd in ipairs(autocmds) do
+    local autocmd_opts = {
+      group = id,
+      desc = "(msgarea.nvim) " .. autocmd.desc,
+      pattern = autocmd.pattern,
+      callback = autocmd.cb,
+    }
+    api.nvim_create_autocmd(autocmd.ev, autocmd_opts)
   end
-
 end
 
 return M

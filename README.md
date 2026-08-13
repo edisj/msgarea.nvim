@@ -1,6 +1,6 @@
 # msgarea.nvim
 
-Extends Neovim's [ui2 system](https://neovim.io/doc/user/lua/#ui2) with a new target: `msgarea`.
+Extends Neovim's [ui2 system](https://neovim.io/doc/user/lua/#ui2) with a new target: `msgarea`
 
 This lets you:
 <table>
@@ -73,8 +73,27 @@ vim.pack.add({
 ## Quick start
 Make sure `ui2` is enabled
 ```lua
--- highly recommended to set the default target to "msg", otherwise "cmd" messages will be covered by msgarea windows
-require("vim._core.ui2").enable({ msg = { targets = { default = "msg" } } })
+-- highly recommended to set the default target to "msg",
+-- otherwise "cmd" messages will be covered by msgarea windows
+
+-- for nvim-0.12:
+require "vim._core.ui2".enable({
+  enable = true,
+  msg = { target = "msg" }
+})
+
+-- for nvim nightly:
+require("vim._core.ui2").enable({
+  enable = true,
+  msg = {
+    targets = {
+      default = "msg",
+      -- you can set msgarea targets here or in config.msgarea_targets
+      -- lua_print = "msgarea",
+      -- lua_error = "msgarea",
+    }
+  }
+})
 ```
 
 Add the following to your init.lua or somewhere in your config
@@ -100,8 +119,8 @@ end, { desc = "close msgarea" })
 ```lua
 require("msgarea").setup({
   -- Whether to enable the plugin. Can be disabled at runtime
-  -- with `require("msgarea").config({ enabled = false })`
-  enabled = true,
+  -- with `require("msgarea").config({ enable = false })`
+  enable = true,
 
   -- List of message `kind`s that should be sent to the msgarea
   -- NOTE: equivalent to setting <kind> = "msgarea" in ui2.cfg.msg.targets
@@ -114,19 +133,22 @@ require("msgarea").setup({
   msgarea_targets = {},
 
   -- Title for persistent messages in message area
-  -- These messages are routed through `<target> = "msgarea"` in ui2 config.
+  -- These messages are routed through `<kind> = "msgarea"` in ui2 config.
   -- Can either be:
   --   string   - A static title to use for all messages.
   --   function - A callable that receives parameter `kind` (:h ui-messages)
   --              and returns a string or `nil`.
   --              If return is `nil`, message is treated as ephemeral.
-  -- For example, to treat `lua_print` and `lua_error` kinds as persistent
-  -- and everything else as ephemeral:
-  --   function(kind)
-  --     local titles = { lua_print = " Lua Print ", lua_error = " Lua Error " }
-  --     return titles[kind]
-  --   end
-  messages_title = " Messages ",
+  -- Examples:
+  --   - to treat `lua_print` and `lua_error` kinds as persistent
+  --     and everything else as ephemeral:
+  --       message_title = function(kind)
+  --         local titles = { lua_print = " Lua Print ", lua_error = " Lua Error " }
+  --         return titles[kind]
+  --       end
+  --   - to make every message persistent with a static title:
+  --       message_title = " Messages "
+  message_title = function(kind) end,
 
   -- View options
   view = {
@@ -136,10 +158,6 @@ require("msgarea").setup({
     --   msgarea - Open below statusline in the message area.
     --   split   - Open as a regular "below" split.
     style = "msgarea",
-    -- While in cmdline, the view is shifted to this position.
-    style_while_in_cmdline = "split",
-    -- While an ephemeral window is open, view is shifted to this position.
-    style_while_in_ephemeral_win = "split",
 
     -- Min and max height of the view, if fraction between 0-1,
     -- it is % of editor size, otherwise absolute size
@@ -164,18 +182,19 @@ require("msgarea").setup({
     -- Whether to enable cmdline completion behaviors.
     -- If using an external cmdline like `tiny-cmdline.nvim`,
     -- you probably want to disable this.
-    enabled = false,
+    enable = false,
 
     -- Which completion plugin you use.
-    -- Currently only `blink.cmp` is supported... working on native
     -- Valid providers:
-    --   "blink.cmp"
-    cmp_provider = "blink.cmp",
+    --   "native"       - builtin cmdline completions
+    --   "mini.cmdline" - https://github.com/nvim-mini/mini.cmdline
+    --   "blink.cmp"    - https://github.com/saghen/blink.cmp
+    cmp_provider = "native",
 
     -- Whether to dynamically resize cmdheight as completion window changes height.
     -- If `false`, the height is set to `vim.o.pumheight`, otherwise
     -- `vim.o.pumheight` is used as the max height.
-    dynamic_height = true,
+    dynamic_height = false,
 
     -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
     -- will cause the the cmdheight to bounce rapidly.
@@ -224,20 +243,12 @@ Here, _any_ arbitrary window can be opened in the `msgarea` (see [Usage](#usage)
 
 Close all active msgarea windows.
 
-### `require("msgarea").show(opts)`
+### `require("msgarea").show()`
 
 Show or refresh the msgarea view.
 
-- `opts` (`table?`)
-  - `silent?` (`boolean`) — supress warning message (default: `false`)
-  - TODO
-
-
-### `require("msgarea").hide(opts)`
+### `require("msgarea").hide()`
 
 Hide, but do not close, all msgarea windows.
 Subsequent `require("msgarea").show()` will restore saved view state.
-
-- `opts` (`table?`)
-  - `cmdheight?` (`integer`) — set cmdheight to this after hiding (default: `nil`)
 
