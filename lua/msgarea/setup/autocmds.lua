@@ -70,10 +70,23 @@ local autocmds = {
   },
   {
     ev = "QuitPre",
-    desc = "close msgarea before quitting",
+    desc = "close msgarea before closing tabpage",
     pattern = "*",
     cb = function()
-      view.close_all()
+      local tab_will_close = true
+      local curr_win = api.nvim_get_current_win()
+      local active_wins = vim.iter(view.state.windows):map(function(data) return data.winid end):totable()
+      for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+        if
+          win ~= curr_win
+          and not vim.tbl_contains(active_wins, win)
+          and api.nvim_win_get_config(win).relative == ""
+        then
+          tab_will_close = false
+          break
+        end
+      end
+      if tab_will_close then view.close_all() end
     end,
   },
   {
