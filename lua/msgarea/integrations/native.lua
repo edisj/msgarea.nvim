@@ -1,15 +1,17 @@
 local api, fn = vim.api, vim.fn
 local ui2 = require("vim._core.ui2")
 local cache = require("msgarea.cache")
+local view = require("msgarea.view")
 local config = require("msgarea.config")
 local util = require("msgarea.util")
 
-local M = {}
+local M = { selected = -1, total = 0 }
 local state = {
   bufnr = nil,
   winid = nil,
   attached = false,
   cache = {},
+  curr_matches = {},
   hide_pending = false,
   hide_timer = nil,
 }
@@ -17,20 +19,15 @@ local state = {
 local NS_UI = api.nvim_create_namespace("msgarea.integrations.native")
 local NS_SHOW = api.nvim_create_namespace("msgarea.integrations.native-cmp-show")
 local NS_SELECT = api.nvim_create_namespace("msgarea.integrations.native-cmp-select")
-
--- for vim.fn.wildtrigger() emitting hide->show too quickly
 local HIDE_DELAY_MS = 10
-
--- border for cmp menu window
 local BORDER = { "", "", "", " ", "", "", "", " " }
 
 local get_lines_and_matches = function(items)
-  local type = fn.getcmdcompltype()
-  local pat = fn.getcmdcomplpat()
-  local key = type .. "\0" .. pat
+  local key = fn.getcmdline():gsub("^%s+", "")
   local cached = state.cache[key]
   if cached then return cached.lines, cached.matches, cached.label_col_width end
 
+  local pat = fn.getcmdcomplpat()
   local lines, matches, label_col_width = {}, {}, 0
   for i, item in ipairs(items) do
     local word = item[1]
@@ -57,11 +54,14 @@ local get_height = function(n_items)
   return dynamic and math.min(n_items, vim.o.pumheight) or vim.o.pumheight
 end
 
-M.popupmenu_show = function(items)
+M.popupmenu_show = function(items, selected)
   state.hide_pending = false
 
   local lines, matches, label_col_width = get_lines_and_matches(items)
+  state.curr_matches = matches
   api.nvim_buf_set_lines(state.bufnr, 0, -1, false, lines)
+
+  M.selected, M.total = selected, #lines
 
   if not (win_valid()) then
     local win_cfg = {
@@ -72,6 +72,7 @@ M.popupmenu_show = function(items)
       focusable = false
     }
     state.winid = api.nvim_open_win(state.bufnr, false, win_cfg)
+    vim.wo[state.winid].winhl = vim.wo[state.winid].winhl .. ",Search:,IncSearch:,CurSearch:"
   else
     try_update_height(get_height(#lines))
   end
@@ -85,15 +86,21 @@ M.popupmenu_show = function(items)
   for i, word in ipairs(lines) do
     if include_desc then
       local desc = cache.excmds[word] or cache.usercmds[word] or ""
-      set_extmark(i, 0, {
+      local opts = {
         virt_text = {{ desc, "MsgAreaCmpLabelDescription" }},
         virt_text_win_col = label_col_width + 4,
-        hl_mode= "combine",
-      })
+        hl_mode = "combine",
+      }
+      set_extmark(i, 0, opts)
     end
     if matches[i] then
       for _, scol in ipairs(matches[i]) do
-        local opts = { end_col = scol + 1, hl_group = "PmenuMatch", hl_mode = "combine" }
+        local opts = {
+          end_col = scol + 1,
+          hl_group = i-1 == selected and "PmenuMatchSel" or "PmenuMatch",
+          hl_mode = "combine",
+          priority = 1,
+        }
         set_extmark(i, scol, opts)
       end
     end
@@ -101,14 +108,28 @@ M.popupmenu_show = function(items)
 end
 
 M.popupmenu_select = function(selected)
+  M.selected = selected
   api.nvim_buf_clear_namespace(state.bufnr, NS_SELECT, 0, -1)
   if selected == -1 then return end
 
-  api.nvim_buf_set_extmark(state.bufnr, NS_SELECT, selected, 0, {
-    line_hl_group = "PmenuSel",
-    hl_mode = "combine",
-  })
-  api.nvim_win_set_cursor(state.winid, { selected + 1, 0 })
+  local set_extmark = function(scol, ecol, opts)
+    opts.end_col = ecol
+    api.nvim_buf_set_extmark(state.bufnr, NS_SELECT, selected, scol, opts)
+  end
+
+  -- NOTE: without explicitly setting priority, this will cover other highlights
+  set_extmark(0, 0, { hl_group = "PmenuSel", end_row = selected+1, hl_eol = true, priority = 0 })
+
+  local lnum = selected + 1
+  local matches = state.curr_matches
+  if matches and matches[lnum] then
+    for _, scol in ipairs(matches[lnum]) do
+      -- NOTE: priority needs to be > than PmenuMatch
+      set_extmark(scol, scol+1, { hl_group = "PmenuMatchSel", priority = 2 })
+    end
+  end
+
+  api.nvim_win_set_cursor(state.winid, { lnum, 0 })
 end
 
 M.popupmenu_hide = function()
@@ -124,6 +145,7 @@ M.popupmenu_hide = function()
     if not (state.hide_pending and win_valid() and fn.mode() == "c") then
       return
     end
+    M.selected, M.total = -1, 0
     state.hide_pending = false
     api.nvim_win_close(state.winid, true)
     if config.get().cmdline.dynamic_height or fn.getcmdline() == "" then
@@ -134,10 +156,12 @@ end
 
 local attach = vim.schedule_wrap(function()
   if fn.mode() ~= "c" then return end
-  local buf = api.nvim_create_buf(false, true)
-  api.nvim_set_option_value("filetype", "native-cmp-menu", { scope = "local", buf = buf })
-  api.nvim_buf_set_name(buf, "msgarea://" .. buf .. "native-cmp-menu")
-  state.bufnr = buf
+  if not (state.bufnr and api.nvim_buf_is_valid(state.bufnr)) then
+    local buf = api.nvim_create_buf(false, true)
+    api.nvim_set_option_value("filetype", "native-cmp-menu", { scope = "local", buf = buf })
+    api.nvim_buf_set_name(buf, "msgarea://" .. buf .. "/native-cmp-menu")
+    state.bufnr = buf
+  end
   state.attached = true
   vim.ui_attach(NS_UI, { ext_popupmenu = true }, function(event, ...)
     local handler = M[event]
@@ -146,11 +170,9 @@ local attach = vim.schedule_wrap(function()
 end)
 
 local detach = vim.schedule_wrap(function()
-  if state.bufnr and api.nvim_buf_is_valid(state.bufnr) then
-    api.nvim_buf_delete(state.bufnr, { force = true })
-  end
   if ui2.cmd.prompt or not state.attached then return end
-  state.bufnr, state.winid, state.attached, state.cache = nil, nil, false, {}
+  view.close_safely(state.winid)
+  state.winid, state.attached, state.cache, state.curr_matches = nil, false, {}, {}
   -- need to schedule this
   -- see https://github.com/neovim/neovim/discussions/32094#discussioncomment-11878489
   vim.ui_detach(NS_UI)
@@ -167,8 +189,8 @@ local setup_autocmds = function()
       callback = cb,
     })
   end
-  on("CmdlineEnter", { ":", "/", "\\?" }, "", attach)
-  on("CmdlineLeave", "*", "", detach)
+  on("CmdlineEnter", { ":", "/", "\\?" }, "attach ext-popupmenu", attach)
+  on("CmdlineLeave", "*", "detach ext-popupmenu", detach)
 end
 
 M.enable = function()

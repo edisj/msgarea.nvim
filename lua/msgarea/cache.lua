@@ -10,9 +10,7 @@ local function populate_excmds_cache()
   local path = api.nvim_get_runtime_file("doc/index.txt", false)[1]
   local bufnr = fn.bufadd(path)
   local buf_was_already_loaded = api.nvim_buf_is_loaded(bufnr)
-  if not buf_was_already_loaded then
-    fn.bufload(bufnr)
-  end
+  if not buf_was_already_loaded then fn.bufload(bufnr) end
 
   local parser = ts.get_parser(bufnr, "vimdoc")
   local tree = assert(parser):parse()[1]
@@ -62,10 +60,9 @@ M.usercmds = {}
 local function populate_usercmds_cache()
   M.usercmds = {}
   for cmd, cmd_spec in pairs(api.nvim_get_commands({})) do
-    M.usercmds[cmd] =
-      cmd_spec.desc ~= "" and cmd_spec.desc
-      or cmd_spec.definition ~= "" and cmd_spec.definition
-      or ""
+    M.usercmds[cmd] = cmd_spec.desc ~= "" and cmd_spec.desc
+                   or cmd_spec.definition ~= "" and cmd_spec.definition
+                   or ""
   end
 end
 

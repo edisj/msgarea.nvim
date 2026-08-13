@@ -36,7 +36,7 @@ local autocmds = {
       then
         return
       end
-      view.show({  silent = true, focused = winid })
+      view.show({ silent = true, focused = winid })
     end,
   },
   {
@@ -117,8 +117,6 @@ local autocmds = {
     desc = "refresh msgarea state on cmdline leave",
     pattern = "*",
     cb = function()
-      if view.cmp_menu_open() then view.close_ephemeral() end
-
       if messages.msg_expanded then
         api.nvim_create_autocmd("CursorMoved", {
           once = true,

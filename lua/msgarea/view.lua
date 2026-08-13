@@ -42,15 +42,14 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
   assert(opts.relative == "msgarea")
   opts = opts or {}
   local title = opts.title
-  local is_ephemeral = title == nil
 
+  local is_ephemeral = title == nil
   if is_ephemeral and M.state.windows.ephemeral then
     if M.in_ephemeral() then
-      ui2.msg.show_msg("msgarea", nil, buf)
+      ui2.msg.show_msg("msgarea", nil, buf) -- TODO: handle all args
       return
     end
     local eph_winid = M.state.windows.ephemeral.winid
-    -- vim.notify("CLOSING: " .. eph_winid)
     M.close_safely(eph_winid)
   end
 
@@ -128,17 +127,8 @@ local schedule_refresh = function(opts)
     state.refresh_opts.flush = true
     M.show(state.refresh_opts)
     redraw_if_needed()
-    -- api.nvim__redraw({flush = true})
     state.refresh_pending, state.refresh_opts = false, {}
   end)
-end
-
-local ensure_valid_wins = function()
-  for i =  #M.state.windows, 1, -1 do
-    if not api.nvim_win_is_valid(M.state.windows[i].winid) then
-      table.remove(M.state.windows, i)
-    end
-  end
 end
 
 ---@param opts? MsgArea.View.ShowOpts
@@ -147,7 +137,11 @@ M.show = function(opts)
   opts = vim.tbl_deep_extend("force", state.refresh_opts, opts or {})
   if not opts.flush then schedule_refresh(opts); return end
 
-  ensure_valid_wins()
+  for i = #state.windows, 1, -1 do
+    if not api.nvim_win_is_valid(state.windows[i].winid) then
+      table.remove(state.windows, i)
+    end
+  end
   if vim.tbl_isempty(state.windows) then
     if not opts.silent then util.warn("no active windows") end -- TODO: do i need silent?
     if fn.mode() ~= "c" then vim.o.cmdheight = M.original_cmdheight end
@@ -160,9 +154,9 @@ M.show = function(opts)
 
   local eph = state.windows.ephemeral
   local new_cmdheight = opts.cmdheight
-    or (eph and eph.height + eph.bheight + (M.cmp_menu_open() and 1 or 0))
-    or (style == "split" and fn.mode() ~= "c" and M.original_cmdheight)
-    or (style == "msgarea" and view_height)
+                        or (eph and eph.height + eph.bheight + (M.cmp_menu_open() and 1 or 0))
+                        or (style == "split" and fn.mode() ~= "c" and M.original_cmdheight)
+                        or (style == "msgarea" and view_height)
   if new_cmdheight then vim.o.cmdheight = new_cmdheight; ui2.cmdheight = new_cmdheight end
 
   if opts.focused then
@@ -199,22 +193,20 @@ M.show = function(opts)
         win_cfg.border = win_spec.border
       end
     end
-    if api.nvim_win_is_valid(winid) then
-      api.nvim_win_set_config(winid, win_cfg)
-      local winbar = win_spec.title and N_active >= min_tabs and WINBAR_STR or ""
-      api.nvim_set_option_value("winbar", winbar, { scope = "local", win = winid })
-    end
+    api.nvim_win_set_config(winid, win_cfg)
+    vim.wo[winid].winbar = win_spec.title and N_active >= min_tabs and WINBAR_STR or ""
   end
 end
 
 M.close_all = function()
-  M.state.closing = true
+  local state = M.state
+  state.closing = true
   for _, win_spec in pairs(M.get_state().windows) do
     M.close_safely(win_spec.winid)
   end
-  M.state.focused = nil
-  M.state.windows = {}
-  M.state.closing = false
+  state.focused = nil
+  state.windows = {}
+  state.closing = false
   vim.o.cmdheight = M.original_cmdheight
 end
 
@@ -259,12 +251,16 @@ M.height = function()
   -- NOTE: Current idea is to take the maximum height across all active
   -- windows open in the msgarea and use that height for all windows
   -- to prevent "height bouncing" when switching between them.
-  local h = M.original_cmdheight
-  if #M.state.windows == 0 then return h end
+  local h, state = M.original_cmdheight, M.state
+  local N_active = #state.windows
+  if N_active == 0 then return h end
   for _, win_spec in ipairs(M.state.windows) do
     h = math.max(h, win_spec.height + win_spec.bheight)
   end
-  return math.max(math.min(h, M.max_height()), M.min_height())
+  local winbar_is_showing = N_active >= config.get().view.winbar_min_tabs
+  h = h + (winbar_is_showing and 1 or 0)
+  h = math.max(math.min(h, M.max_height()), M.min_height())
+  return h
 end
 
 ---Compute max height based on `config.view.max_height`.
@@ -306,9 +302,13 @@ end
 
 M.close_ephemeral = function(new_cmdheight)
   M.close_safely((M.state.windows.ephemeral or {}).winid)
-  M.state.windows.ephemeral = nil -- ???
+  -- TODO: find out why this is needed!
+  -- without it seems the state isn't updated in time?
+  -- as in I get errors about win not being valid in some nvim_set_win_config call
+  M.state.windows.ephemeral = nil
   if new_cmdheight then
-    vim.schedule(function() vim.o.cmdheight = new_cmdheight end)
+    vim.o.cmdheight = new_cmdheight
+    ui2.cmdheight = new_cmdheight
   end
 end
 

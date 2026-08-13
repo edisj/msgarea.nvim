@@ -41,10 +41,6 @@ M.setup = function(config)
     end
   end
 
-  -- ui2.msg.msg_show = function(...)
-  --   messages.msg_show(_msg_show, ...)
-  -- end
-
   ui2.msg.show_msg = function(...)
     messages.show_msg(_show_msg, ...)
   end

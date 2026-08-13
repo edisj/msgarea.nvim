@@ -36,10 +36,8 @@ end
 
 M.msg_clear = function() ui2.msg.msg:clear() end
 if vim.fn.has("nvim-0.13") == 0 then M.msg_clear = function() ui2.msg.msg_clear() end end
--- if vim.fn.has("nvim-0.13") == 0 then M.msg_clear = function()  end end
 
 M.cmd_clear = function() ui2.msg.cmd:clear() end
 if vim.fn.has("nvim-0.13") == 0 then M.cmd_clear = function() api.nvim_echo({{ "" }}, false, {}) end end
--- if vim.fn.has("nvim-0.13") == 0 then M.cmd_clear = function()  end end
 
 return M

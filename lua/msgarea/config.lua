@@ -21,13 +21,16 @@ local default_config = {
   --   function - A callable that receives parameter `kind` (:h ui-messages)
   --              and returns a string or `nil`.
   --              If return is `nil`, message is treated as ephemeral.
-  -- For example, to treat `lua_print` and `lua_error` kinds as persistent
-  -- and everything else as ephemeral:
-  --   function(kind)
-  --     local titles = { lua_print = " Lua Print ", lua_error = " Lua Error " }
-  --     return titles[kind]
-  --   end
-  messages_title = " Messages ",
+  -- Examples:
+  --   - to treat `lua_print` and `lua_error` kinds as persistent
+  --     and everything else as ephemeral:
+  --       message_title = function(kind)
+  --         local titles = { lua_print = " Lua Print ", lua_error = " Lua Error " }
+  --         return titles[kind]
+  --       end
+  --   - to make every message persistent with a static title:
+  --       message_title = " Messages "
+  message_title = function(kind) end,
 
   -- View options
   view = {
@@ -66,16 +69,14 @@ local default_config = {
     -- Which completion plugin you use.
     -- Valid providers:
     --   "native"       - builtin cmdline completions
-    --   "blink.cmp"    - https://github.com/saghen/blink.cmp
     --   "mini.cmdline" - https://github.com/nvim-mini/mini.cmdline
+    --   "blink.cmp"    - https://github.com/saghen/blink.cmp
     cmp_provider = "native",
-
-    max_height = vim.o.pumheight,
 
     -- Whether to dynamically resize cmdheight as completion window changes height.
     -- If `false`, the height is set to `vim.o.pumheight`, otherwise
     -- `vim.o.pumheight` is used as the max height.
-    dynamic_height = true,
+    dynamic_height = false,
 
     -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
     -- will cause the the cmdheight to bounce rapidly.
@@ -145,7 +146,7 @@ M.setup = function(user_config)
 
   errors[#errors + 1] = validate("enable", config.enable, "boolean")
   errors[#errors + 1] = validate("msgarea_targets", config.msgarea_targets, "table")
-  errors[#errors + 1] = validate("messages_title", config.messages_title, { "string", "function" })
+  errors[#errors + 1] = validate("message_title", config.message_title, { "string", "function" })
 
   for field, expected in pairs {
     style = { "msgarea", "split" },
@@ -159,7 +160,7 @@ M.setup = function(user_config)
 
   for field, expected in pairs {
     enable = "boolean",
-    cmp_provider = { "native", "blink.cmp", "mini.cmdline" },
+    cmp_provider = { "native", "mini.cmdline", "blink.cmp" },
     descriptions = "boolean",
     dynamic_height = "boolean",
     resize_throttle_ms = "number",
@@ -178,7 +179,7 @@ end
 ---@class (exact) Msgarea.UserConfig : Msgarea.Config
 ---@field enable? boolean
 ---@field msgarea_targets? string[]
----@field messages_title? string|fun(kind?: string):string
+---@field message_title? string|fun(kind?: string):string|nil
 ---@field view? Msgarea.Config.ViewPartial
 ---@field cmdline? Msgarea.Config.CmdlinePartial
 
@@ -200,7 +201,7 @@ end
 ---@class (exact) Msgarea.Config
 ---@field enable boolean
 ---@field msgarea_targets string[]
----@field messages_title string|fun(kind?:string):string
+---@field message_title string|fun(kind?:string):string|nil
 ---@field view Msgarea.Config.View
 ---@field cmdline Msgarea.Config.Cmdline
 

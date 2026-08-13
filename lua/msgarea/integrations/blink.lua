@@ -1,6 +1,7 @@
 local api, fn = vim.api, vim.fn
 local config = require("msgarea.config")
 local cache = require("msgarea.cache")
+local view = require("msgarea.view")
 local util = require("msgarea.util")
 
 local menu, _update_position
@@ -44,7 +45,7 @@ end
 local id
 local _saved_blink_config = {}
 local setup_autocmds = function()
-  local id = api.nvim_create_augroup("msgarea-blinkcmp-autocmds", { clear = true })
+  id = api.nvim_create_augroup("msgarea-blinkcmp-autocmds", { clear = true })
   local on = function(event, pattern, desc, cb)
     api.nvim_create_autocmd(event, {
       group = id,
@@ -74,6 +75,7 @@ local setup_autocmds = function()
     if ev.event == "CmdlineEnter" then
       set_blink_menu_config({ winhighlight = WINHL })
     elseif ev.event == "CmdlineLeave" then
+      view.close_ephemeral()
       set_blink_menu_config(_saved_blink_config)
       -- NOTE: this fixes a bug when <C-c> out of cmdline, for some reason the scrollbar sticks around
       local sb = menu.win.scrollbar

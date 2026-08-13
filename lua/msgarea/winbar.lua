@@ -18,7 +18,7 @@ M.render = function()
     :map(function(_, win)
       if not win.title then return end
       local hl = win.winid == state.focused and "MsgAreaWinBarSel" or "MsgAreaWinBarFill"
-      local text = with_hl(win.title, hl)
+      local text = with_hl(type(win.title) == "table" and win.title[1][1] or win.title, hl)
       return with_click(text, win.winid)
     end)
     :totable(), with_hl(sep, "MsgAreaWinBarSep"))
