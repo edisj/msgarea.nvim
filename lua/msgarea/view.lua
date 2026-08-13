@@ -280,9 +280,6 @@ M.min_height = function(min)
   if min > 0 and min < 1 then
     min = math.floor(min * vim.o.lines)
   end
-  local actual_min_height = M.state.hijacked and 1
-    or (#M.state.windows >= config.get().view.winbar_min_tabs and 2) or 1
-  min = min < actual_min_height and actual_min_height or min
   return min
 end
 
