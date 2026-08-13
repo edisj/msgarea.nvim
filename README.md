@@ -1,6 +1,6 @@
 # msgarea.nvim
 
-Extends Neovim's [ui2 system](https://neovim.io/doc/user/lua/#ui2) with a new target: `msgarea`.
+Extends Neovim's [ui2 system](https://neovim.io/doc/user/lua/#ui2) with a new target: `msgarea`
 
 This lets you:
 <table>
@@ -73,8 +73,27 @@ vim.pack.add({
 ## Quick start
 Make sure `ui2` is enabled
 ```lua
--- highly recommended to set the default target to "msg", otherwise "cmd" messages will be covered by msgarea windows
-require("vim._core.ui2").enable({ msg = { targets = { default = "msg" } } })
+-- highly recommended to set the default target to "msg",
+-- otherwise "cmd" messages will be covered by msgarea windows
+
+-- for nvim-0.12:
+require "vim._core.ui2".enable({
+  enable = true,
+  msg = { target = "msg" }
+})
+
+-- for nvim nightly:
+require("vim._core.ui2").enable({
+  enable = true,
+  msg = {
+    targets = {
+      default = "msg",
+      -- you can set msgarea targets here or in config.msgarea_targets
+      -- lua_print = "msgarea",
+      -- lua_error = "msgarea",
+    }
+  }
+})
 ```
 
 Add the following to your init.lua or somewhere in your config
@@ -133,66 +152,66 @@ require("msgarea").setup({
 
   -- View options
   view = {
-      -- Determines whether to place the view below statusline
-      -- or as a regular split.
-      -- Valid styles are:
-      --   msgarea - Open below statusline in the message area.
-      --   split   - Open as a regular "below" split.
-      style = "msgarea",
+    -- Determines whether to place the view below statusline
+    -- or as a regular split.
+    -- Valid styles are:
+    --   msgarea - Open below statusline in the message area.
+    --   split   - Open as a regular "below" split.
+    style = "msgarea",
 
-      -- Min and max height of the view, if fraction between 0-1,
-      -- it is % of editor size, otherwise absolute size
-      min_height = 1,
-      max_height = 0.3,
+    -- Min and max height of the view, if fraction between 0-1,
+    -- it is % of editor size, otherwise absolute size
+    min_height = 1,
+    max_height = 0.3,
 
-      -- Determines position of tabs in winbar.
-      -- Analagous to `title_pos` in win config (:h nvim_open_win())
-      -- Valid positions are: "left" | "center" | "right"
-      winbar_pos = "left",
+    -- Determines position of tabs in winbar.
+    -- Analagous to `title_pos` in win config (:h nvim_open_win())
+    -- Valid positions are: "left" | "center" | "right"
+    winbar_pos = "left",
 
-      -- Optional separator between tabs in winbar.
-      winbar_separator = "",
+    -- Optional separator between tabs in winbar.
+    winbar_separator = "",
 
-      -- Minimum number of msgarea windows needed to show tabs.
-      -- e.g. if 2, then tab is hidden when only a single window is open.
-      winbar_min_tabs = 1,
+    -- Minimum number of msgarea windows needed to show tabs.
+    -- e.g. if 2, then tab is hidden when only a single window is open.
+    winbar_min_tabs = 1,
   },
 
   -- Cmdline completion options
   cmdline = {
-      -- Whether to enable cmdline completion behaviors.
-      -- If using an external cmdline like `tiny-cmdline.nvim`,
-      -- you probably want to disable this.
-      enable = false,
+    -- Whether to enable cmdline completion behaviors.
+    -- If using an external cmdline like `tiny-cmdline.nvim`,
+    -- you probably want to disable this.
+    enable = false,
 
-      -- Which completion plugin you use.
-      -- Valid providers:
-      --   "native"       - builtin cmdline completions
-      --   "mini.cmdline" - https://github.com/nvim-mini/mini.cmdline
-      --   "blink.cmp"    - https://github.com/saghen/blink.cmp
-      cmp_provider = "native",
+    -- Which completion plugin you use.
+    -- Valid providers:
+    --   "native"       - builtin cmdline completions
+    --   "mini.cmdline" - https://github.com/nvim-mini/mini.cmdline
+    --   "blink.cmp"    - https://github.com/saghen/blink.cmp
+    cmp_provider = "native",
 
-      -- Whether to dynamically resize cmdheight as completion window changes height.
-      -- If `false`, the height is set to `vim.o.pumheight`, otherwise
-      -- `vim.o.pumheight` is used as the max height.
-      dynamic_height = false,
+    -- Whether to dynamically resize cmdheight as completion window changes height.
+    -- If `false`, the height is set to `vim.o.pumheight`, otherwise
+    -- `vim.o.pumheight` is used as the max height.
+    dynamic_height = false,
 
-      -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
-      -- will cause the the cmdheight to bounce rapidly.
-      -- If `dynamic_height = false` then this has no effect.
-      resize_throttle_ms = 200,
+    -- Debounce in ms for resizing the cmdheight. If set to 0, typing quickly
+    -- will cause the the cmdheight to bounce rapidly.
+    -- If `dynamic_height = false` then this has no effect.
+    resize_throttle_ms = 200,
 
-      -- Whether to add description text to cmdline completions.
-      -- For ex-cmds, parsed directly from `index.txt` (:h ex-cmds-index),
-      -- for usercmds, obtained from `vim.api.nvim_get_commands({})`.
-      -- Notes:
-      --   - If you find some usercmds are missing descriptions, they may have
-      --     been lazy loaded after cache was populated.
-      --     Call `require("msgarea.cache").refresh()` to repopulate cache at any time.
-      --   - If using `blink.cmp` and you are not seeing descriptions, make sure in
-      --     your bilnk config, `cmdline.completion.menu.draw.columns` includes "label_description".
-      --   - Subject to change depending on https://github.com/neovim/neovim/pull/39672
-      descriptions = true,
+    -- Whether to add description text to cmdline completions.
+    -- For ex-cmds, parsed directly from `index.txt` (:h ex-cmds-index),
+    -- for usercmds, obtained from `vim.api.nvim_get_commands({})`.
+    -- Notes:
+    --   - If you find some usercmds are missing descriptions, they may have
+    --     been lazy loaded after cache was populated.
+    --     Call `require("msgarea.cache").refresh()` to repopulate cache at any time.
+    --   - If using `blink.cmp` and you are not seeing descriptions, make sure in
+    --     your bilnk config, `cmdline.completion.menu.draw.columns` includes "label_description".
+    --   - Subject to change depending on https://github.com/neovim/neovim/pull/39672
+    descriptions = true,
   },
 })
 ```
@@ -224,20 +243,12 @@ Here, _any_ arbitrary window can be opened in the `msgarea` (see [Usage](#usage)
 
 Close all active msgarea windows.
 
-### `require("msgarea").show(opts)`
+### `require("msgarea").show()`
 
 Show or refresh the msgarea view.
 
-- `opts` (`table?`)
-  - `silent?` (`boolean`) — supress warning message (default: `false`)
-  - TODO
-
-
-### `require("msgarea").hide(opts)`
+### `require("msgarea").hide()`
 
 Hide, but do not close, all msgarea windows.
 Subsequent `require("msgarea").show()` will restore saved view state.
-
-- `opts` (`table?`)
-  - `cmdheight?` (`integer`) — set cmdheight to this after hiding (default: `nil`)
 

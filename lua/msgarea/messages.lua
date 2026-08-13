@@ -3,13 +3,15 @@ local view = require("msgarea.view")
 local config = require("msgarea.config")
 local util = require("msgarea.util")
 
-local M = { msg_expanded = false, ids = {} }
-local internal = {}
-local state = {
-  bufnr = nil, ---@type integer
-  winid = nil, ---@type integer
+local M = {
+  msg_expanded = false,
+  state = {
+    bufnr = nil, ---@type integer
+    winid = nil, ---@type integer
+    current_batch = {},
+  },
 }
-M.state = state
+local internal = {}
 
 local NS = api.nvim_create_namespace("msgarea.messages")
 
@@ -22,7 +24,7 @@ end
 ---Monkey-patched require("vim._core.ui2.messages").set_pos(...)
 M.set_pos = function(set_pos, tgt)
   if tgt == "pager" then
-    view.close_safely(state.winid)
+    view.close_safely(M.state.winid)
     view.hide({ cmdheight = view.original_cmdheight })
     util.msg_clear()
   end
@@ -44,7 +46,7 @@ M.show_msg = function(show_msg, tgt, kind, content, replace_last, append, id)
   local bufnr, winid, showopts
   if type(content) == "table" then
     -- content is MsgContent[] text chunks so we create the buffer ourselves
-    bufnr = internal.content_to_buf(kind, content, replace_last, id, is_ephemeral)
+    bufnr = internal.content_to_buf(kind, content, replace_last, append, id, is_ephemeral)
   else
     -- content is ready-to-go buffer so just show it as is
     bufnr = content
@@ -58,7 +60,8 @@ end
 
 -- internal helpers -----------------------------------------------------------
 
-internal.content_to_buf = function(kind, content, _, id, is_ephemeral)
+internal.content_to_buf = function(kind, content, _, append, _, is_ephemeral)
+  local state = M.state
   local bufnr
 
   if is_ephemeral then
@@ -70,19 +73,22 @@ internal.content_to_buf = function(kind, content, _, id, is_ephemeral)
     end
   else
     bufnr = -1
-    if M.ids[id] then
-      local name = "msgarea://" .. M.ids[id] .. "/" .. id
+    if state.current_batch[kind] then
+      local name = internal.make_uri(state.current_batch[kind], kind)
       bufnr = fn.bufnr(name)
+      append = true
     end
     if bufnr == -1 then
-      bufnr = internal.create_buf(nil, kind, id)
-      M.ids[id] = bufnr
+      bufnr = internal.create_buf(nil, kind)
+      state.current_batch[kind] = bufnr
     end
+    vim.schedule(function()
+      if state.current_batch[kind] then state.current_batch[kind] = nil end
+    end)
   end
 
   local lines = {}
   local extmarks_to_apply = {}
-
   local start_col = 0
   local i = 1
   for _, chunk in ipairs(content) do
@@ -121,8 +127,8 @@ internal.content_to_buf = function(kind, content, _, id, is_ephemeral)
 
   vim.bo[bufnr].modifiable = true
   -- TODO: need to look into semantics of replace last
-  -- local start = replace_last and -1 or 0
-  api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+  local start = append and -1 or 0
+  api.nvim_buf_set_lines(bufnr, start, -1, false, lines)
   vim.bo[bufnr].modifiable = false
 
   api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
@@ -173,15 +179,19 @@ internal.get_winid = function(bufnr, title)
   return winid, showopts
 end
 
-internal.create_buf = function(name, kind, id)
+internal.create_buf = function(name, kind)
   local bufnr = api.nvim_create_buf(false, true)
   vim.keymap.set("n", "q", function()
     api.nvim_win_close(api.nvim_get_current_win(), true)
   end, { buf = bufnr })
   api.nvim_set_option_value("bufhidden", name and "hide" or "wipe", { buf = bufnr, scope = "local" })
-  name = name or ("msgarea://" .. bufnr .. "/" .. kind .. "/" .. id)
+  name = name or internal.make_uri(bufnr, kind)
   api.nvim_buf_set_name(bufnr, name)
   return bufnr
+end
+
+internal.make_uri = function(bufnr, kind)
+  return "msgarea://" .. bufnr .. "/" .. kind
 end
 
 internal.win_set_wo = function(win)
