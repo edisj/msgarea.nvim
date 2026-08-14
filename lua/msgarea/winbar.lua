@@ -17,7 +17,7 @@ M.render = function()
     .iter(ipairs(view.get_state().windows))
     :map(function(_, win)
       if not win.title then return end
-      local hl = win.winid == state.focused and "MsgAreaWinBarSel" or "MsgAreaWinBarFill"
+      local hl = win.winid == state.curwin and "MsgAreaWinBarSel" or "MsgAreaWinBarFill"
       local text = with_hl(type(win.title) == "table" and win.title[1][1] or win.title, hl)
       return with_click(text, win.winid)
     end)
@@ -36,7 +36,7 @@ M.on_click = function(minwid, _, button, _)
   -- not the clicked window
   local winid = minwid
   if button == "l" then
-    view.show({ flush = true, silent = true, focused = winid })
+    view.show({ flush = true, silent = true, curwin = winid })
   elseif button == "r" then
     vim.api.nvim_win_close(winid, true)
   end

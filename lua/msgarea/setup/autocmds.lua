@@ -12,7 +12,7 @@ local skip_refresh = false
 
 local saved_ephemeral_state
 local saved_ephemeral_idx
-local prev_focused
+local prev_curwin
 
 local autocmds = {
   {
@@ -23,20 +23,20 @@ local autocmds = {
       -- NOTE: this occurs if, for example, you press a keymap to focus a msgarea window
       -- and that is not the currently focused window in require("msgarea.view").state.focused
       local winid
-      for _, win_spec in ipairs(view.get_state().windows) do
-        if win_spec.bufnr == ev.buf then
-          winid = win_spec.winid
+      for _, data in ipairs(view.get_state().windows) do
+        if data.bufnr == ev.buf then
+          winid = data.winid
           break
         end
       end
       if
         winid == nil                                -- not a msgarea win
         or vim.api.nvim_get_current_win() ~= winid  -- is msgarea win but not focused
-        or view.state.focused == winid              -- already focused
+        or view.state.curwin == winid              -- already focused
       then
         return
       end
-      view.show({ silent = true, focused = winid })
+      view.show({ silent = true, curwin = winid })
     end,
   },
   {
@@ -60,10 +60,10 @@ local autocmds = {
         return
       end
       local h = vim.v.option_new
-      for _, win_spec in ipairs(view.state.windows) do
-        if api.nvim_win_is_valid(win_spec.winid) then
-          h = h - win_spec.bheight
-          api.nvim_win_set_height(win_spec.winid, h)
+      for _, data in ipairs(view.state.windows) do
+        if api.nvim_win_is_valid(data.winid) then
+          h = h - data.bheight
+          api.nvim_win_set_height(data.winid, h)
         end
       end
     end,
@@ -98,16 +98,16 @@ local autocmds = {
         -- FIXME: why does confirm bug out sometimes and not render correctly?
         view.hide({ cmdheight = 0 })
       else
-        local eph, focused, height = view.state.windows.ephemeral, nil, nil
+        local eph, curwin, height = view.state.windows.ephemeral, nil, nil
         if eph then
           if api.nvim_get_current_win() ~= eph.winid then
             view.close_ephemeral(1)
           else
-            prev_focused = view.state.focused
+            prev_curwin = view.state.curwin
             saved_ephemeral_state, saved_ephemeral_idx = eph, #view.state.windows + 1
             view.state.windows[saved_ephemeral_idx] = saved_ephemeral_state
             view.state.windows.ephemeral = nil
-            focused = saved_ephemeral_state.winid
+            curwin = saved_ephemeral_state.winid
             height = api.nvim_buf_line_count(saved_ephemeral_state.bufnr)
           end
         end
@@ -120,7 +120,7 @@ local autocmds = {
           -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
           if ui2.cmd.prompt then return end
           if fn.mode() ~= "c" then skip_refresh = true; return end
-          view.show({ silent = true, cmdheight = 1, focused = focused, height = height })
+          view.show({ silent = true, cmdheight = 1, curwin = curwin, height = height })
         end)
       end
     end,
@@ -145,16 +145,16 @@ local autocmds = {
           if ui2.cmd.prompt or (api.nvim_get_current_win() == ui2.wins.pager) then return end
           if skip_refresh then skip_refresh = false; return end
 
-          local focused
+          local curwin
           if saved_ephemeral_state then
-            focused = prev_focused
+            curwin = prev_curwin
             table.remove(view.state.windows, saved_ephemeral_idx)
             if api.nvim_win_is_valid(saved_ephemeral_state.winid) then
               view.state.windows.ephemeral = saved_ephemeral_state
             end
-            saved_ephemeral_state, saved_ephemeral_idx, prev_focused = nil, nil, nil
+            saved_ephemeral_state, saved_ephemeral_idx, prev_curwin = nil, nil, nil
           end
-          view.show({ silent = true, focused = focused })
+          view.show({ silent = true, curwin = curwin })
         end)
       end
     end,

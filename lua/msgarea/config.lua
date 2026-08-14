@@ -1,4 +1,4 @@
----@type Msgarea.Config
+---@type msgarea.Config
 local default_config = {
   -- Whether to enable the plugin. Can be disabled at runtime
   -- with `require("msgarea").config({ enable = false })`
@@ -97,13 +97,13 @@ local default_config = {
   },
 }
 
----@type Msgarea.Config
+---@type msgarea.Config
 local _config
 
 local M = {}
 
 ---Return merged config if setup was called, otherwise default config
----@return Msgarea.Config
+---@return msgarea.Config
 M.get = function()
   return _config or default_config
 end
@@ -136,9 +136,9 @@ end
 ---Returns true and merged config on success
 ---or false and list of error messages on fail.
 ---
----@param user_config Msgarea.UserConfig
+---@param user_config msgarea.UserConfig
 ---@return boolean
----@return Msgarea.Config|string[]
+---@return msgarea.Config|string[]
 M.setup = function(user_config)
   local config = vim.tbl_deep_extend("force", _config or default_config, user_config)
 
@@ -176,14 +176,14 @@ M.setup = function(user_config)
   end
 end
 
----@class (exact) Msgarea.UserConfig : Msgarea.Config
+---@class (exact) msgarea.UserConfig : msgarea.Config
 ---@field enable? boolean
 ---@field msgarea_targets? string[]
 ---@field message_title? string|fun(kind?: string):string|nil
----@field view? Msgarea.Config.ViewPartial
----@field cmdline? Msgarea.Config.CmdlinePartial
+---@field view? msgarea.config.ViewPartial
+---@field cmdline? msgarea.config.CmdlinePartial
 
----@class (exact) Msgarea.Config.ViewPartial : Msgarea.Config.View
+---@class (exact) msgarea.config.ViewPartial : msgarea.config.View
 ---@field style? "msgarea"|"split"
 ---@field max_height? number
 ---@field min_height? number
@@ -191,21 +191,21 @@ end
 ---@field winbar_separator? string
 ---@field winbar_min_tabs? integer
 
----@class (exact) Msgarea.Config.CmdlinePartial : Msgarea.Config.Cmdline
+---@class (exact) msgarea.config.CmdlinePartial : msgarea.config.Cmdline
 ---@field enable? boolean
 ---@field cmp_provider? "native"|"blink.cmp"|"mini.cmdline"
 ---@field dynamic_height? boolean
 ---@field resize_throttle_ms? number
 ---@field descriptions? boolean
 
----@class (exact) Msgarea.Config
+---@class (exact) msgarea.Config
 ---@field enable boolean
 ---@field msgarea_targets string[]
 ---@field message_title string|fun(kind?:string):string|nil
----@field view Msgarea.Config.View
----@field cmdline Msgarea.Config.Cmdline
+---@field view msgarea.config.View
+---@field cmdline msgarea.config.Cmdline
 
----@class (exact) Msgarea.Config.View
+---@class (exact) msgarea.config.View
 ---@field style "msgarea"|"split"
 ---@field max_height number
 ---@field min_height number
@@ -213,7 +213,7 @@ end
 ---@field winbar_separator string
 ---@field winbar_min_tabs integer
 
----@class (exact) Msgarea.Config.Cmdline
+---@class (exact) msgarea.config.Cmdline
 ---@field enable boolean
 ---@field cmp_provider "native"|"blink.cmp"|"mini.cmdline"
 ---@field dynamic_height boolean

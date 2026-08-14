@@ -7,26 +7,26 @@ local M = {
   original_cmdheight = vim.o.cmdheight, ---@type integer
   state = {
     windows = {
-      ephemeral = nil ---@type MsgArea.WinSpec
+      ephemeral = nil ---@type msgarea.view.WinData
     },
     height = vim.o.cmdheight,
     refresh_pending = false,
-    refresh_opts = {}, ---@type MsgArea.View.ShowOpts
+    refresh_opts = {}, ---@type msgarea.view.ShowOpts
   }
 }
 setmetatable(M.state, {
   __index = function(t, k)
-    if k == "focused" then
-      return internal.focused_winid
+    if k == "curwin" then
+      return internal.curwin
     else
       return rawget(t, k)
     end
   end,
   __newindex = function(t, k, v)
-    if k == "focused" then
+    if k == "curwin" then
       local i = internal.history_ring.idx
       if v == internal.history_ring[i] then return end
-      internal.set_focus_and_add_to_history_ring(v)
+      internal.set_curwin_and_add_to_history_ring(v)
     else
       rawset(t, k, v)
     end
@@ -62,8 +62,7 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
   vim.wo[winid].winhl = WINHL_STR
   internal.win_set_autocmds(winid, buf, is_ephemeral)
 
-  ---@type MsgArea.WinSpec
-  local win_spec = {
+  local windata = { ---@type msgarea.view.WinData
     bufnr = buf,
     winid = winid,
     title = title,
@@ -72,10 +71,10 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
     bheight = internal.get_bheight(win_config.border),
   }
   local k = is_ephemeral and "ephemeral" or #M.state.windows + 1
-  M.state.windows[k] = win_spec
+  M.state.windows[k] = windata
 
   util.cmd_clear()
-  M.show({ silent = true, focused = not is_ephemeral and winid or nil })
+  M.show({ silent = true, curwin = not is_ephemeral and winid or nil })
   return winid
 end
 
@@ -96,7 +95,7 @@ M.win_set_config = function(nvim_win_set_config, win, win_config)
   end
 
   win_config = internal.initial_win_config(win_config)
-  local win_spec = {
+  local windata = { ---@type msgarea.view.WinData
     bufnr = buf,
     winid = win,
     title = title,
@@ -104,10 +103,10 @@ M.win_set_config = function(nvim_win_set_config, win, win_config)
     border = win_config.border,
     bheight = internal.get_bheight(win_config.border),
   }
-  M.state.windows[k] = win_spec
+  M.state.windows[k] = windata
 
   nvim_win_set_config(win, win_config)
-  M.show({ flush = true, silent = true, focused = not is_ephemeral and win or nil })
+  M.show({ flush = true, silent = true, curwin = not is_ephemeral and win or nil })
 end
 
 local redraw_if_needed = function()
@@ -131,7 +130,7 @@ local schedule_refresh = function(opts)
   end)
 end
 
----@param opts? MsgArea.View.ShowOpts
+---@param opts? msgarea.view.ShowOpts
 M.show = function(opts)
   local state = M.state
   opts = vim.tbl_deep_extend("force", state.refresh_opts, opts or {})
@@ -159,58 +158,58 @@ M.show = function(opts)
                         or (style == "msgarea" and view_height)
   if new_cmdheight then vim.o.cmdheight = new_cmdheight; ui2.cmdheight = new_cmdheight end
 
-  if opts.focused then
-    if internal.key_of(opts.focused) == nil then
-      error("winid " .. opts.focused .. " not found")
+  if opts.curwin then
+    if internal.key_of(opts.curwin) == nil then
+      error("winid " .. opts.curwin .. " not found")
     end
-    state.focused = opts.focused
+    state.curwin = opts.curwin
   else
     -- NOTE: this case occurs when focus needs to return to a window not in history...
     -- can increase buffer size or maybe think of a better idea than ring buffer
-    if state.focused == nil or not api.nvim_win_is_valid(state.focused) then
-      state.focused = state.windows[1] and state.windows[1].winid
+    if state.curwin == nil or not api.nvim_win_is_valid(state.curwin) then
+      state.curwin = state.windows[1] and state.windows[1].winid
     end
   end
 
   local min_tabs = opts.winbar_min_tabs or config.get().view.winbar_min_tabs
   local N_active = #state.windows
   -- all of the win_config logic is in this for loop
-  for k, win_spec in pairs(state.windows) do
+  for k, data in pairs(state.windows) do
     local win_cfg
-    local winid = win_spec.winid
+    local winid = data.winid
     if k == "ephemeral" then
       win_cfg = internal.shared_win_cfg()
       win_cfg.hide = false
-      win_cfg.height = new_cmdheight - (M.cmp_menu_open() and 1 or 0) - win_spec.bheight
-      win_cfg.border = win_spec.border
+      win_cfg.height = new_cmdheight - (M.cmp_menu_open() and 1 or 0) - data.bheight
+      win_cfg.border = data.border
     else
-      if style == "split" and winid == state.focused then
+      if style == "split" and winid == state.curwin then
         win_cfg = { hide = false, height = view_height, split = "below", win = -1 }
       else
         win_cfg = internal.shared_win_cfg()
-        win_cfg.hide = winid ~= state.focused
-        win_cfg.height = view_height - win_spec.bheight
-        win_cfg.border = win_spec.border
+        win_cfg.hide = winid ~= state.curwin
+        win_cfg.height = view_height - data.bheight
+        win_cfg.border = data.border
       end
     end
     api.nvim_win_set_config(winid, win_cfg)
-    vim.wo[winid].winbar = win_spec.title and N_active >= min_tabs and WINBAR_STR or ""
+    vim.wo[winid].winbar = data.title and N_active >= min_tabs and WINBAR_STR or ""
   end
 end
 
 M.close_all = function()
   local state = M.state
   state.closing = true
-  for _, win_spec in pairs(M.get_state().windows) do
-    M.close_safely(win_spec.winid)
+  for _, data in pairs(M.get_state().windows) do
+    M.close_safely(data.winid)
   end
-  state.focused = nil
+  state.curwin = nil
   state.windows = {}
   state.closing = false
   vim.o.cmdheight = M.original_cmdheight
 end
 
----@param opts? MsgArea.View.HideOpts
+---@param opts? msgarea.view.HideOpts
 M.hide = function(opts)
   opts = opts or {}
   local state = M.state
@@ -221,8 +220,8 @@ M.hide = function(opts)
     hide = true, relative = "editor", row = vim.o.lines,
     col = 0, width = vim.o.columns, height = state.height,
   }
-  for _, win_spec in pairs(state.windows) do
-    pcall(api.nvim_win_set_config, win_spec.winid, win_cfg)
+  for _, data in pairs(state.windows) do
+    pcall(api.nvim_win_set_config, data.winid, win_cfg)
   end
   if opts.cmdheight then
     ui2.cmdheight = opts.cmdheight
@@ -236,7 +235,7 @@ M.get_state = function()
   return {
     height = state.height,
     windows = vim.deepcopy(state.windows),
-    focused = state.focused
+    curwin = state.curwin
   }
 end
 
@@ -254,8 +253,8 @@ M.height = function()
   local h, state = M.original_cmdheight, M.state
   local N_active = #state.windows
   if N_active == 0 then return h end
-  for _, win_spec in ipairs(M.state.windows) do
-    h = math.max(h, win_spec.height + win_spec.bheight)
+  for _, data in ipairs(M.state.windows) do
+    h = math.max(h, data.height + data.bheight)
   end
   local winbar_is_showing = N_active >= config.get().view.winbar_min_tabs
   h = h + (winbar_is_showing and 1 or 0)
@@ -395,11 +394,11 @@ internal.win_set_autocmds = function(winid, bufnr, is_ephemeral)
         -- Maybe look into better removal strategy...
         table.remove(state.windows, k)
       end
-      local focused = winid == internal.focused_winid and internal.get_last_focused() or nil
+      local curwin = winid == internal.curwin and internal.get_prev_curwin() or nil
       -- FIXME: special case to prevent showing when closing ephemeral
       -- to enter pager. Need to think of a better solution
       if api.nvim_get_current_win() ~= ui2.wins.pager then
-        M.show({ silent = true, focused = focused })
+        M.show({ silent = true, curwin = curwin })
       end
     end
     on("WinClosed", { pattern = winid }, remove_win_from_state)
@@ -449,12 +448,12 @@ internal.key_of = function(winid)
   end
 end
 
-internal.focused_winid = nil
+internal.curwin = nil
 internal.history_ring = { idx = 0, size = 20 }
-internal.set_focus_and_add_to_history_ring = function(winid)
-  -- IMPORTANT: set focused_winid even when winid is nil
+internal.set_curwin_and_add_to_history_ring = function(winid)
+  -- IMPORTANT: set curwin even when winid is nil
   -- otherwise M.state.focused will have invalid winid
-  internal.focused_winid = winid
+  internal.curwin = winid
   if not winid then return end
   internal.history_ring.idx = internal.history_ring.idx + 1
   local i, size = internal.history_ring.idx, internal.history_ring.size
@@ -463,7 +462,7 @@ internal.set_focus_and_add_to_history_ring = function(winid)
 end
 
 ---@return integer? window-ID of last focused win in msgarea
-internal.get_last_focused = function()
+internal.get_prev_curwin = function()
   local i, size = internal.history_ring.idx, internal.history_ring.size
   -- idea here is to walk backwards from current position
   -- in history ring until we find a valid winid
@@ -477,14 +476,14 @@ internal.get_last_focused = function()
     if
       winid ~= nil
       and api.nvim_win_is_valid(winid)
-      and winid ~= internal.focused_winid
+      and winid ~= internal.curwin
     then
       return winid
     end
   end
 end
 
----@class (exact) MsgArea.WinSpec
+---@class (exact) msgarea.view.WinData
 ---@field bufnr integer
 ---@field winid integer
 ---@field title? string
@@ -492,16 +491,16 @@ end
 ---@field bheight integer
 ---@field border any[]|"none"|"single"|"double"|"rounded"|"solid"|"shadow"
 
----@class (exact) MsgArea.View.ShowOpts
+---@class (exact) msgarea.view.ShowOpts
 ---@field silent? boolean suppress warning msg (default false)
 ---@field flush? boolean (default false)
----@field focused? integer focused winid override
+---@field curwin? integer curwin winid override
 ---@field height? integer view height override
 ---@field cmdheight? integer cmdheight override
 ---@field style? "msgarea"|"split" style override
 ---@field winbar_min_tabs? integer config.view.winbar_min_tabs override
 
----@class (exact) MsgArea.View.HideOpts
+---@class (exact) msgarea.view.HideOpts
 ---@field cmdheight? integer cmdheight override
 
 return M

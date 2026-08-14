@@ -17,7 +17,7 @@ M.close_all = function()
 end
 
 ---Initialize the plugin.
----@param user_config Msgarea.UserConfig
+---@param user_config msgarea.UserConfig
 M.setup = function(user_config)
   require("msgarea.setup").setup(user_config)
 end

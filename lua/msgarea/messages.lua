@@ -155,7 +155,7 @@ internal.get_winid = function(bufnr, title)
   for _, data in ipairs(view.state.windows) do
     if bufnr == data.bufnr then
       data.height = height
-      showopts.focused = data.winid
+      showopts.curwin = data.winid
       return data.winid, showopts
     end
   end
@@ -174,7 +174,7 @@ internal.get_winid = function(bufnr, title)
   local win_cfg = { relative = "msgarea", title = title, height = height, style = "minimal" }
   winid = api.nvim_open_win(bufnr, false, win_cfg)
   internal.win_set_wo(winid)
-  if is_overflow then showopts.focused = winid end
+  if is_overflow then showopts.curwin = winid end
 
   return winid, showopts
 end
