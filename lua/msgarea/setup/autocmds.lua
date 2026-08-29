@@ -74,11 +74,14 @@ local autocmds = {
     pattern = "*",
     cb = function()
       local tab_will_close = true
-      local curr_win = api.nvim_get_current_win()
-      local active_wins = vim.iter(view.state.windows):map(function(data) return data.winid end):totable()
+      local curwin = api.nvim_get_current_win()
+      local active_wins = vim
+        .iter(pairs(view.state.windows))
+        :map(function(_, data) return data.winid end)
+        :totable()
       for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
         if
-          win ~= curr_win
+          win ~= curwin
           and not vim.tbl_contains(active_wins, win)
           and api.nvim_win_get_config(win).relative == ""
         then
