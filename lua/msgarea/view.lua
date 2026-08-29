@@ -211,7 +211,10 @@ end
 
 ---@param opts? msgarea.view.HideOpts
 M.hide = function(opts)
-  opts = opts or {}
+  if opts and opts.cmdheight then
+    ui2.cmdheight = opts.cmdheight
+    vim.o.cmdheight = opts.cmdheight
+  end
   local state = M.state
   if vim.tbl_isempty(state.windows) then return end
   state.refresh_pending, state.refresh_opts = false, {}
@@ -222,10 +225,6 @@ M.hide = function(opts)
   }
   for _, data in pairs(state.windows) do
     pcall(api.nvim_win_set_config, data.winid, win_cfg)
-  end
-  if opts.cmdheight then
-    ui2.cmdheight = opts.cmdheight
-    vim.o.cmdheight = opts.cmdheight
   end
 end
 
