@@ -16,19 +16,19 @@ local internal = {}
 local NS = api.nvim_create_namespace("msgarea.messages")
 
 ---Monkey-patched require("vim._core.ui2.messages").expand_msg(...)
-M.expand_msg = function(expand_msg, src, tgt)
+M.expand_msg = function(expand_msg, src, tgt, focus)
   M.msg_expanded = src == "msg" and tgt == nil
-  expand_msg(src, tgt)
+  expand_msg(src, tgt, focus)
 end
 
 ---Monkey-patched require("vim._core.ui2.messages").set_pos(...)
-M.set_pos = function(set_pos, tgt)
+M.set_pos = function(set_pos, tgt, focus)
   if tgt == "pager" then
     view.close_safely(M.state.winid)
     view.hide({ cmdheight = view.original_cmdheight })
     util.msg_clear()
   end
-  set_pos(tgt)
+  set_pos(tgt, focus)
 end
 
 ---Monkey-patched require("vim._core.ui2.messages").show_msg(...)
