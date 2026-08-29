@@ -332,7 +332,7 @@ internal.initial_win_config = function(opts, is_ephemeral)
   local height = opts.height or 1
   if is_ephemeral then
     -- NOTE: max height of ephemeral window is determined by ui2 cmd setting
-    height = math.min(height, M.max_height(ui2.cfg.msg.cmd.height))
+    height = math.min(height, M.max_height(util.cmd_height()))
   else
     height = math.min(height, M.max_height())
     height = math.max(height, M.min_height())

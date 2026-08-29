@@ -34,6 +34,9 @@ M.throttled = function(f, ms)
   end
 end
 
+M.cmd_height = function() return vim.opt.mopt:get().maxheight and tonumber(vim.opt.mopt:get().maxheight)/100 or 0.50 end
+if vim.fn.has("nvim-0.13") == 0 then M.cmd_height = function() return ui2.cfg.msg.cmd.height end end
+
 M.msg_clear = function() ui2.msg.msg:clear() end
 if vim.fn.has("nvim-0.13") == 0 then M.msg_clear = function() ui2.msg.msg_clear() end end
 
