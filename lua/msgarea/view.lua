@@ -39,10 +39,10 @@ local WINBAR_STR = "%{%v:lua.require'msgarea.winbar'.render()%}"
 
 ---monkey-patched nvim_open_win
 M.open_win = function(nvim_open_win, buf, enter, opts)
-  assert(opts.relative == "msgarea")
   opts = opts or {}
-  local title = opts.title
+  assert(opts.relative == "msgarea")
 
+  local title = opts.title
   local is_ephemeral = title == nil
   if is_ephemeral and M.state.windows.ephemeral then
     if M.in_ephemeral() then
