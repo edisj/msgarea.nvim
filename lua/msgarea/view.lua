@@ -297,14 +297,7 @@ end
 
 M.close_ephemeral = function(new_cmdheight)
   M.close_safely((M.state.windows.ephemeral or {}).winid)
-  -- TODO: find out why this is needed!
-  -- without it seems the state isn't updated in time?
-  -- as in I get errors about win not being valid in some nvim_set_win_config call
-  M.state.windows.ephemeral = nil
-  if new_cmdheight then
-    vim.o.cmdheight = new_cmdheight
-    ui2.cmdheight = new_cmdheight
-  end
+  if new_cmdheight then internal.set_cmdheight(new_cmdheight) end
 end
 
 M.close_safely = function(winid)
@@ -313,6 +306,14 @@ end
 
 
 -- internal helpers -----------------------------------------------------------
+
+
+internal.set_cmdheight = function(cmdheight)
+  if cmdheight == vim.o.cmdheight then return end
+  M.state.setting_cmdheight = true
+  vim.o.cmdheight = cmdheight
+  M.state.setting_cmdheight = false
+end
 
 internal.shared_win_cfg = function()
   return {
@@ -368,11 +369,12 @@ internal.win_set_autocmds = function(winid, bufnr, is_ephemeral)
   local on = function(event, opts, cb)
     api.nvim_create_autocmd(event, {
       group = id,
+      nested = opts.nested,
       buf = opts.buf,
       pattern = opts.pattern and tostring(opts.pattern) or nil,
-      callback = function(...)
+      callback = function(ev)
         if not (winid and api.nvim_win_is_valid(winid)) then return true end
-        cb(...)
+        cb(ev)
       end
     })
   end
@@ -388,49 +390,52 @@ internal.win_set_autocmds = function(winid, bufnr, is_ephemeral)
         state.windows[k] = nil
       else
         assert(type(k) == "number")
-        -- NOTE: this is very inefficient when closing multiple windows in a single call
-        -- due to excessively shifting elements, but shouldn't matter with such small `n`.
-        -- Maybe look into better removal strategy...
         table.remove(state.windows, k)
       end
       local curwin = winid == internal.curwin and internal.get_prev_curwin() or nil
       -- FIXME: special case to prevent showing when closing ephemeral
       -- to enter pager. Need to think of a better solution
       if api.nvim_get_current_win() ~= ui2.wins.pager then
-        M.show({ silent = true, curwin = curwin })
+        M.show({ flush = true, silent = true, curwin = curwin })
       end
     end
-    on("WinClosed", { pattern = winid }, remove_win_from_state)
+    -- IMPORTANT: needs nested!! this was difficult to diagnose...
+    -- but basically, beacuse ui2 depends on OptionSet autocmd to update state,
+    -- when this show() is called in this callback, if nested is not true,
+    -- the OptionSet autocmd won't fire, which means ui2 state won't update,
+    -- which means the the ui2 cmd win rendering is all messed up.
+    -- This way, I can flush changes immediately, which means cmdheight
+    -- shinks before an action is taken, so window heights look GOOD.
+    on("WinClosed", { nested = true, pattern = winid }, remove_win_from_state)
   end
 
   do
-    local update_winsize = vim.schedule_wrap(function(new_height)
-      M.show({ flush = true, height = new_height })
-      if not api.nvim_win_get_config(ui2.wins.msg).hide then
-        ui2.msg.set_pos()
+    local update_winsize = function()
+      local k = internal.key_of(winid)
+      local data = k and k ~= "ephemeral" and M.state.windows[k]
+      if data then
+        local outer = api.nvim_win_get_height(winid) + data.border_height
+        if outer ~= M.state.height then
+          local winbar_h = vim.wo[winid][0].winbar ~= "" and 1 or 0
+          data.resize_height = outer - data.border_height - winbar_h
+          M.show({ silent = true })
+        end
       end
-    end)
-    on({ "WinResized", "VimResized" }, { buf = bufnr }, function(ev)
-      local new_height
-      if ev.event == "WinResized" then
-        new_height = api.nvim_win_get_height(winid)
-      end
-      update_winsize(new_height)
-    end)
+       if not api.nvim_win_get_config(ui2.wins.msg).hide then
+         ui2.msg.set_pos()
+       end
+     end
+    on("WinResized", { buf = bufnr }, update_winsize)
   end
 
   if is_ephemeral then
-    local scheduled_close = vim.schedule_wrap(function()
-      M.close_safely(winid)
-    end)
-    on("WinLeave", { buf = bufnr }, scheduled_close)
     -- NOTE: defer CursorMoved in case cursor is moved while cmdheight changes
     vim.defer_fn(function()
       -- wrapped in pcall because group id can be deleted by the time defer is called
       pcall(on, "CursorMoved", {}, function()
         -- NOTE: fn.mode() == "c" is needed for nvim-0.12
         if api.nvim_get_current_win() == winid or fn.mode() == "c" then return end
-        scheduled_close()
+        vim.schedule(function() M.close_safely(winid) end)
       end)
     end, 50)
   end
