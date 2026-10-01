@@ -25,18 +25,19 @@ local BORDER = { "", "", "", " ", "", "", "", " " }
 local get_lines_and_matches = function(items)
   local key = fn.getcmdline():gsub("^%s+", "")
   local cached = state.cache[key]
-  if cached then return cached.lines, cached.matches, cached.label_col_width end
+  if cached then return cached.lines, cached.matches, cached.label_col_width, cached.menus end
 
   local pat = fn.getcmdcomplpat()
-  local lines, matches, label_col_width = {}, {}, 0
+  local lines, matches, label_col_width, menus = {}, {}, 0, {}
   for i, item in ipairs(items) do
-    local word = item[1]
+    local word, abbr, menu = item[1], item[2], item[3]
+    menus[i] = menu
     lines[i] = word
     matches[i] = fn.matchfuzzypos({ word }, pat)[2][1]
     if #word > label_col_width then label_col_width = #word end
   end
-  state.cache[key] = { lines = lines, matches = matches, label_col_width = label_col_width }
-  return lines, matches, label_col_width
+  state.cache[key] = { lines = lines, matches = matches, label_col_width = label_col_width, menus = menus }
+  return lines, matches, label_col_width, menus
 end
 
 local win_valid = function()
@@ -57,7 +58,7 @@ end
 M.popupmenu_show = function(items, selected)
   state.hide_pending = false
 
-  local lines, matches, label_col_width = get_lines_and_matches(items)
+  local lines, matches, label_col_width, menus = get_lines_and_matches(items)
   state.curr_matches = matches
   api.nvim_buf_set_lines(state.bufnr, 0, -1, false, lines)
 
@@ -82,10 +83,11 @@ M.popupmenu_show = function(items, selected)
     api.nvim_buf_set_extmark(state.bufnr, NS_SHOW, lnum-1, col, extmark_opts)
   end
 
-  local include_desc = config.get().cmdline.descriptions and fn.getcmdcompltype() == "command"
+  local compltype = fn.getcmdcompltype()
+  local include_desc = config.get().cmdline.descriptions and (compltype == "command" or compltype:match("^custom"))
   for i, word in ipairs(lines) do
     if include_desc then
-      local desc = cache.excmds[word] or cache.usercmds[word] or ""
+      local desc = compltype:match("^custom") and menus[i] or cache.excmds[word] or cache.usercmds[word] or ""
       local opts = {
         virt_text = {{ desc, "MsgAreaCmpLabelDescription" }},
         virt_text_win_col = label_col_width + 4,
@@ -189,7 +191,7 @@ local setup_autocmds = function()
       callback = cb,
     })
   end
-  on("CmdlineEnter", { ":", "/", "\\?" }, "attach ext-popupmenu", attach)
+  on("CmdlineEnter", { ":", "/", "\\?", "@" }, "attach ext-popupmenu", attach)
   on("CmdlineLeave", "*", "detach ext-popupmenu", detach)
 end
 
