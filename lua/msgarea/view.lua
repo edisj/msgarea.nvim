@@ -47,7 +47,8 @@ M.open_win = function(nvim_open_win, buf, enter, opts)
   local is_ephemeral = title == nil
   if is_ephemeral and M.state.windows.ephemeral then
     if M.in_ephemeral() then
-      ui2.msg.show_msg("msgarea", nil, buf) -- TODO: handle all args
+      ---@diagnostic disable-next-line: param-type-mismatch
+      ui2.msg.show_msg("msgarea", nil, buf, false, false, nil)
       return
     end
     local eph_winid = M.state.windows.ephemeral.winid
@@ -113,6 +114,7 @@ end
 local redraw_if_needed = function()
   if
     fn.mode() == "c"
+    ---@diagnostic disable-next-line: undefined-field
     or (_G.MiniPick and _G.MiniPick.is_picker_active())
   then
     api.nvim__redraw({ flush = true })
@@ -236,10 +238,14 @@ M.hide = function(opts)
   state.refresh_pending = false
   state.refresh_opts = {}
   util.msg_clear()
+
+  -- TODO: revisit this line after
+  -- https://github.com/neovim/neovim/issues/42154 fixed
+  local height = state.height or M.outer_height()
   local win_cfg = internal.shared_win_cfg()
   for _, data in pairs(state.windows) do
     win_cfg.hide = true
-    win_cfg.height = state.height - data.border_height
+    win_cfg.height = height - data.border_height
     api.nvim_win_set_config(data.winid, win_cfg)
   end
 end
