@@ -52,21 +52,27 @@ local autocmds = {
     desc = "refresh height of active windows on cmdheight change",
     pattern = "cmdheight",
     cb = function()
-      if fn.mode() == "c" or vim.v.option_new == vim.v.option_old then return end
+      if
+        fn.mode() == "c"
+        or vim.v.option_new == vim.v.option_old
+        or view.state.setting_cmdheight
+      then
+        return
+      end
 
-      local h = vim.v.option_new
-      if view.style() == "split" then
-        local eph = view.state.windows.ephemeral
-        if eph and api.nvim_win_is_valid(eph.winid) then
-          h = h - eph.bheight
-          api.nvim_win_set_height(eph.winid, h)
+      local new_height = vim.v.option_new
+      local set_new_height = function(data)
+        if data and api.nvim_win_is_valid(data.winid) then
+          local inner_height = new_height - data.border_height
+          api.nvim_win_set_height(data.winid, inner_height)
         end
+      end
+
+      if view.style() == "split" then
+        set_new_height(view.state.windows.ephemeral)
       else
         for _, data in ipairs(view.state.windows) do
-          if api.nvim_win_is_valid(data.winid) then
-            h = h - data.bheight
-            api.nvim_win_set_height(data.winid, h)
-          end
+          set_new_height(data)
         end
       end
     end,
