@@ -5,16 +5,96 @@ local view = require("msgarea.view")
 local messages = require("msgarea.messages")
 local M = {}
 
--- NOTE: `skip_refresh` only exists to fix annoying behavior when pressing
--- keymaps that use ":" for <Cmd>, for example %
--- Cursor still bounces to cmdline... not sure how to fix
 local skip_refresh = false
 
-local saved_ephemeral_state
-local saved_ephemeral_idx
-local prev_curwin
+---@type { data: msgarea.view.WinData, idx: integer, prev_curwin: integer? }?
+local saved_ephemeral_state = nil
+
+local save_ephemeral_state = function()
+  local eph = view.state.windows.ephemeral
+  if not eph then return end
+
+  if api.nvim_get_current_win() ~= eph.winid then
+    view.close_ephemeral(1)
+    return
+  end
+
+  local data = eph
+  local idx = #view.state.windows + 1
+  local prev_curwin = view.state.curwin
+  saved_ephemeral_state = { data = data, idx = idx, prev_curwin = prev_curwin }
+  view.state.windows[idx] = eph
+  view.state.windows.ephemeral = nil
+
+  local curwin = eph.winid
+  local height = eph.inner_height + eph.border_height
+  return curwin, height
+end
+
+local restore_ephemeral_state = function()
+  if not saved_ephemeral_state then return end
+
+  local curwin = saved_ephemeral_state.prev_curwin
+  table.remove(view.state.windows, saved_ephemeral_state.idx)
+  if api.nvim_win_is_valid(saved_ephemeral_state.data.winid) then
+    view.state.windows.ephemeral = saved_ephemeral_state.data
+  end
+  saved_ephemeral_state = nil
+
+  return curwin
+end
 
 local autocmds = {
+  {
+    ev = "CmdlineEnter",
+    desc = "refresh msgarea state on cmdline enter",
+    pattern = "*",
+    nested = true,
+    cb = function(ev)
+      if ev.match == "-" then
+        view.hide({ cmdheight = view.original_cmdheight })
+      else
+        local curwin, height = save_ephemeral_state()
+        vim.schedule(function()
+          -- NOTE: this check is still needed even though we filter out the
+          -- "@" and "-" patterns because here we're scheduling the refresh.
+          -- For example, calling `:restart` with unsaved changes will trigger a
+          -- CmdlineEnter event, the refresh will be scheduled, and THEN the confirm()
+          -- prompt will trigger it's own CmdlineEnter refresh, at which point the
+          -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
+          if ev.match == "-" and ui2.cmd.prompt then return end
+          if fn.mode() ~= "c" then skip_refresh = true; return end
+          view.show({ silent = true, cmdheight = 1, curwin = curwin, height = height })
+        end)
+      end
+    end,
+  },
+  {
+    ev = "CmdlineLeave",
+    desc = "refresh msgarea state on cmdline leave",
+    pattern = "*",
+    cb = function()
+      if messages.msg_expanded then
+        local autocmd_opts = {
+          once = true,
+          callback = function()
+            messages.msg_expanded = false
+            if not (api.nvim_get_current_win() == ui2.wins.pager) then
+              view.show({ silent = true })
+            end
+          end
+        }
+        api.nvim_create_autocmd("CursorMoved", autocmd_opts)
+      else
+        vim.schedule(function()
+          if ui2.cmd.prompt or (api.nvim_get_current_win() == ui2.wins.pager) then return end
+          if skip_refresh then skip_refresh = false; return end
+          local curwin = restore_ephemeral_state()
+          view.show({ flush = true, silent = true, curwin = curwin })
+        end)
+      end
+    end,
+  },
   {
     ev = "WinEnter",
     desc = "ensure msgarea window is focused when entered",
@@ -101,76 +181,6 @@ local autocmds = {
       if tab_will_close then view.close_all() end
     end,
   },
-  {
-    ev = "CmdlineEnter",
-    desc = "refresh msgarea state on cmdline enter",
-    pattern = "*",
-    cb = function(ev)
-      if ev.match == "@" or ev.match == "-" then
-        -- FIXME: why does confirm bug out sometimes and not render correctly?
-        view.hide({ cmdheight = 0 })
-      else
-        local eph, curwin, height = view.state.windows.ephemeral, nil, nil
-        if eph then
-          if api.nvim_get_current_win() ~= eph.winid then
-            view.close_ephemeral(1)
-          else
-            prev_curwin = view.state.curwin
-            saved_ephemeral_state, saved_ephemeral_idx = eph, #view.state.windows + 1
-            view.state.windows[saved_ephemeral_idx] = saved_ephemeral_state
-            view.state.windows.ephemeral = nil
-            curwin = saved_ephemeral_state.winid
-            height = api.nvim_buf_line_count(saved_ephemeral_state.bufnr)
-          end
-        end
-        vim.schedule(function()
-          -- NOTE: this check is still needed even though we filter out the
-          -- "@" and "-" patterns because here we're scheduling the refresh.
-          -- For example, calling `:restart` with unsaved changes will trigger a
-          -- CmdlineEnter event, the refresh will be scheduled, and THEN the confirm()
-          -- prompt will trigger it's own CmdlineEnter refresh, at which point the
-          -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
-          if ui2.cmd.prompt then return end
-          if fn.mode() ~= "c" then skip_refresh = true; return end
-          view.show({ silent = true, cmdheight = 1, curwin = curwin, height = height })
-        end)
-      end
-    end,
-  },
-  {
-    ev = "CmdlineLeave",
-    desc = "refresh msgarea state on cmdline leave",
-    pattern = "*",
-    cb = function()
-      if messages.msg_expanded then
-        api.nvim_create_autocmd("CursorMoved", {
-          once = true,
-          callback = function()
-            messages.msg_expanded = false
-            if not (api.nvim_get_current_win() == ui2.wins.pager) then
-              view.show({ silent = true })
-            end
-          end
-        })
-      else
-        vim.schedule(function()
-          if ui2.cmd.prompt or (api.nvim_get_current_win() == ui2.wins.pager) then return end
-          if skip_refresh then skip_refresh = false; return end
-
-          local curwin
-          if saved_ephemeral_state then
-            curwin = prev_curwin
-            table.remove(view.state.windows, saved_ephemeral_idx)
-            if api.nvim_win_is_valid(saved_ephemeral_state.winid) then
-              view.state.windows.ephemeral = saved_ephemeral_state
-            end
-            saved_ephemeral_state, saved_ephemeral_idx, prev_curwin = nil, nil, nil
-          end
-          view.show({ silent = true, curwin = curwin })
-        end)
-      end
-    end,
-  },
 }
 
 local id -- augroup id
@@ -185,6 +195,7 @@ M.setup = function(config)
       group = id,
       desc = "(msgarea.nvim) " .. autocmd.desc,
       pattern = autocmd.pattern,
+      nested = autocmd.nested,
       callback = autocmd.cb,
     }
     api.nvim_create_autocmd(autocmd.ev, autocmd_opts)
