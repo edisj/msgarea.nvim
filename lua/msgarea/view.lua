@@ -224,7 +224,9 @@ end
 M.hide = function(opts)
   if opts and opts.cmdheight then
     -- TODO: check why internal.set_cmdheight() doesnt work
-    -- here after 'empty'->'confirm' bug is fixed
+    -- without manually setting ui2.cmdheight
+    -- after 'empty'->'confirm' bug is fixed upstream
+    ui2.cmdheight = opts.cmdheight
     internal.set_cmdheight(opts.cmdheight)
   end
 
