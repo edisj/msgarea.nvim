@@ -142,11 +142,11 @@ internal.content_to_buf = function(kind, content, _, append, _, is_ephemeral)
   end
 
   local start = append and -1 or 0
+  local row_offset = append and api.nvim_buf_line_count(bufnr) or 0
   vim.bo[bufnr].modifiable = true
   api.nvim_buf_set_lines(bufnr, start, -1, false, lines)
   vim.bo[bufnr].modifiable = false
 
-  local row_offset = append and api.nvim_buf_line_count(bufnr) or 0
   if not append then api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1) end
   for _, extmark in ipairs(extmarks_to_apply) do
     local srow = extmark.row + row_offset
