@@ -26,8 +26,8 @@ local save_ephemeral_state = function()
   view.state.windows[idx] = eph
   view.state.windows.ephemeral = nil
 
-  local curwin = eph.winid
-  local height = eph.inner_height + eph.border_height
+  local curwin = data.winid
+  local height = data.inner_height + data.border_height
   return curwin, height
 end
 
@@ -139,21 +139,22 @@ local autocmds = {
       then
         return
       end
-
-      local new_height = vim.v.option_new
-      local set_new_height = function(data)
-        if data and api.nvim_win_is_valid(data.winid) then
-          local inner_height = new_height - data.border_height
-          api.nvim_win_set_height(data.winid, inner_height)
+      local new_cmdheight = vim.v.option_new
+      local data
+      if view.style() == "split" then
+        data = view.state.windows["ephemeral"]
+      else
+        local state = view.get_state()
+        for i, _data in ipairs(state.windows) do
+          if _data.winid == state.curwin then
+            data = view.state.windows[i]
+            break
+          end
         end
       end
-
-      if view.style() == "split" then
-        set_new_height(view.state.windows.ephemeral)
-      else
-        for _, data in ipairs(view.state.windows) do
-          set_new_height(data)
-        end
+      if data and api.nvim_win_is_valid(data.winid) then
+        local height = new_cmdheight - data.border_height
+        api.nvim_win_set_height(data.winid, height)
       end
     end,
   },
