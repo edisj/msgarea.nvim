@@ -51,6 +51,7 @@ local autocmds = {
     pattern = "*",
     nested = true,
     cb = function(ev)
+      view.state.hold_resize = true
       if ev.match == "-" then
         view.hide({ cmdheight = view.original_cmdheight })
       else
@@ -64,7 +65,7 @@ local autocmds = {
           -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
           if ev.match == "-" and ui2.cmd.prompt then return end
           if fn.mode() ~= "c" then skip_refresh = true; return end
-          view.show({ silent = true, cmdheight = 1, curwin = curwin, height = height })
+          view.show({ silent = true, cmdheight = 1, curwin = curwin, height = nil })
         end)
       end
     end,
@@ -90,7 +91,8 @@ local autocmds = {
           if ui2.cmd.prompt or (api.nvim_get_current_win() == ui2.wins.pager) then return end
           if skip_refresh then skip_refresh = false; return end
           local curwin = restore_ephemeral_state()
-          view.show({ flush = true, silent = true, curwin = curwin })
+          view.show({ silent = true, curwin = curwin })
+          vim.schedule(function() view.state.hold_resize = false end)
         end)
       end
     end,
