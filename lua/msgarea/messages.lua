@@ -162,7 +162,7 @@ end
 internal.get_winid = function(bufnr, title)
   local winid = nil
   local showopts = { silent = true }
-  local new_height = api.nvim_buf_line_count(bufnr)
+  local line_count = api.nvim_buf_line_count(bufnr)
 
   local is_ephemeral = title == nil
   local is_overflow = is_ephemeral and view.in_ephemeral()
@@ -175,7 +175,7 @@ internal.get_winid = function(bufnr, title)
   --   3) sending a whole buffer as message again
   for _, data in ipairs(view.state.windows) do
     if bufnr == data.bufnr then
-      data.inner_height = new_height
+      if not data.resized then data.inner_height = line_count end
       showopts.curwin = data.winid
       return data.winid, showopts
     end
@@ -195,7 +195,7 @@ internal.get_winid = function(bufnr, title)
   local win_cfg = {
     relative = "msgarea",
     title = title,
-    height = new_height,
+    height = line_count,
     style = "minimal",
     -- NOTE: autocmds sometimes cause trouble when
     -- messages are opened during unsafe moments
