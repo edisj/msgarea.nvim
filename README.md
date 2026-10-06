@@ -29,6 +29,11 @@ This lets you:
 
 and more...
 
+> [!NOTE]
+> If you find yourself reading this, sorry the docs are still a bit sparse... I'm still working on this in my free time
+> with some planned improvements/bugfixes and I don't want to use AI to do my writing. I won't get to updating
+> the docs until I'm happy with the state of the code
+
 ## Features
   - Route `ui-messages` to the msgarea as ephemeral or persistent windows.
     See `:h msgarea-ephemeral` for distinction between ephemeral vs persistent.
