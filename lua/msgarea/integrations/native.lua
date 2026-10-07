@@ -72,7 +72,8 @@ M.popupmenu_show = function(items, selected)
       height = get_height(#lines),
       focusable = false
     }
-    state.winid = api.nvim_open_win(state.bufnr, false, win_cfg)
+    -- state.winid = api.nvim_open_win(state.bufnr, false, win_cfg)
+    state.winid = view._open_win(state.bufnr, false, win_cfg, "ephemeral", false)
     vim.wo[state.winid].winhl = vim.wo[state.winid].winhl .. ",Search:,IncSearch:,CurSearch:"
   else
     try_update_height(get_height(#lines))
@@ -173,7 +174,7 @@ end)
 
 local detach = vim.schedule_wrap(function()
   if ui2.cmd.prompt or not state.attached then return end
-  view.close_safely(state.winid)
+  view.win_close_safely(state.winid)
   state.winid, state.attached, state.cache, state.curr_matches = nil, false, {}, {}
   -- need to schedule this
   -- see https://github.com/neovim/neovim/discussions/32094#discussioncomment-11878489

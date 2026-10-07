@@ -51,6 +51,7 @@ local setup_autocmds = function()
       group = id,
       pattern = pattern,
       desc = "(msgarea.nvim) " .. desc,
+      nested = true,
       callback = cb,
     })
   end
@@ -71,11 +72,11 @@ local setup_autocmds = function()
       menu_config_2[k] = v
     end
   end
-  on({ "CmdlineEnter", "CmdlineLeave" }, { ":", "\\/", "\\?" }, "update blink.cmp menu config in cmdline", function(ev)
+  on({ "CmdlineEnter", "CmdlineLeave" }, { ":", "\\/", "\\?", "@" }, "update blink.cmp menu config in cmdline", function(ev)
     if ev.event == "CmdlineEnter" then
       set_blink_menu_config({ winhighlight = WINHL })
     elseif ev.event == "CmdlineLeave" then
-      view.close_ephemeral()
+      view.ephemeral_close()
       set_blink_menu_config(_saved_blink_config)
       -- NOTE: this fixes a bug when <C-c> out of cmdline, for some reason the scrollbar sticks around
       local sb = menu.win.scrollbar

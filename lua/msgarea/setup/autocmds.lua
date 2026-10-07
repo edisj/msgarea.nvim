@@ -10,12 +10,13 @@ local skip_refresh = false
 ---@type { data: msgarea.view.WinData, idx: integer, prev_curwin: integer? }?
 local saved_ephemeral_state = nil
 
+-- TODO: this should be done using view.win_set_config(...) instead
 local save_ephemeral_state = function()
   local eph = view.state.windows.ephemeral
   if not eph then return end
 
   if api.nvim_get_current_win() ~= eph.winid then
-    view.close_ephemeral(1)
+    view.ephemeral_close(1)
     return
   end
 
@@ -142,18 +143,8 @@ local autocmds = {
         return
       end
       local new_cmdheight = vim.v.option_new
-      local data
-      if view.style() == "split" then
-        data = view.state.windows["ephemeral"]
-      else
-        local state = view.get_state()
-        for i, _data in ipairs(state.windows) do
-          if _data.winid == state.curwin then
-            data = view.state.windows[i]
-            break
-          end
-        end
-      end
+      local data = view.style() == "split" and view.state.windows.ephemeral
+        or view.win_get_data(view.state.curwin)
       if data and api.nvim_win_is_valid(data.winid) then
         local height = new_cmdheight - data.border_height
         api.nvim_win_set_height(data.winid, height)

@@ -1,14 +1,14 @@
-local api, fn = vim.api, vim.fn
+local api = vim.api
 local view = require("msgarea.view")
 local config = require("msgarea.config")
 local util = require("msgarea.util")
+local orig = require("msgarea.setup.runtime_patches").original
 
 local M = {
   msg_expanded = false,
   ns = api.nvim_create_namespace("msgarea.messages"),
   state = {
     bufnr = nil, ---@type integer
-    winid = nil, ---@type integer
     current_batch = {}, ---@type table<string, integer> kind -> bufnr
     overflow = {}, ---@type table<string, integer> kind -> bufnr
   },
@@ -17,71 +17,75 @@ local M = {
 local internal = {}
 
 ---Monkey-patched require("vim._core.ui2.messages").expand_msg(...)
-M.expand_msg = function(expand_msg, src, tgt, focus)
+M.expand_msg = function(src, tgt, focus)
   M.msg_expanded = src == "msg" and tgt == nil
-  expand_msg(src, tgt, focus)
+  orig.expand_msg(src, tgt, focus)
 end
 
 ---Monkey-patched require("vim._core.ui2.messages").set_pos(...)
-M.set_pos = function(set_pos, tgt, focus)
+M.set_pos = function(tgt, focus)
   if tgt == "pager" then
-    view.close_safely(M.state.winid)
+    view.ephemeral_close()
     view.hide({ cmdheight = view.original_cmdheight })
     util.msg_clear()
   end
-  set_pos(tgt, focus)
+  orig.set_pos(tgt, focus)
 end
 
 ---Monkey-patched require("vim._core.ui2.messages").show_msg(...)
-M.show_msg = function(show_msg, tgt, kind, content, replace_last, append, id)
+M.show_msg = function(tgt, kind, content, replace_last, append, id)
   if tgt ~= "msgarea" then
-    -- fallback to original show_msg for all other targets
-    show_msg(tgt, kind, content, replace_last, append, id)
+    orig.show_msg(tgt, kind, content, replace_last, append, id)
     return
   end
 
-  local title = kind and config.get().message_title or nil
-  if type(title) == "function" then title = title(kind) end
-  local is_ephemeral = title == nil
-
-  local bufnr, winid, showopts
-  if type(content) == "table" then
-    -- content is MsgContent[] text chunks so we create the buffer ourselves
-    bufnr = internal.content_to_buf(kind, content, replace_last, append, id, is_ephemeral)
-  else
+  local message_title = config.get().message_title
+  local title = type(message_title) == "string" and message_title or message_title(kind)
+  local win_kind = view.win_resolve_kind(nil, title)
+  local bufnr, set_wo
+  if type(content) == "number" and api.nvim_buf_is_valid(content) then
     -- content is ready-to-go buffer so just show it as is
     bufnr = content
+  else -- content is MsgContent[] text chunks so we create the buffer ourselves
+    local force_append
+    bufnr, force_append = internal.get_bufnr_for_kind(win_kind, kind)
+    internal.buf_set_content(bufnr, content, append or force_append)
+    set_wo = true
   end
 
-  winid, showopts = internal.get_winid(bufnr, title)
-  view.show(showopts)
-  return winid
+  local win_cfg = {
+    height = api.nvim_buf_line_count(bufnr),
+    relative = "msgarea",
+    style = "minimal",
+    title = title,
+    noautocmd = set_wo,
+  }
+  local winid = view._open_win(bufnr, false, win_cfg, win_kind, true)
+  if set_wo then internal.win_set_options(winid) end
 end
 
 
 -- internal helpers -----------------------------------------------------------
 
-internal.content_to_buf = function(kind, content, _, append, _, is_ephemeral)
+internal.get_bufnr_for_kind = function(win_kind, msg_kind)
   local state = M.state
-  local bufnr
-
-  if is_ephemeral and view.in_ephemeral() then
-    -- need to send this message to overflow
-    local overflow_bufnr = state.overflow[kind]
+  local bufnr, append
+  if win_kind == "overflow" then
+    local overflow_bufnr = state.overflow[msg_kind]
     if overflow_bufnr and api.nvim_buf_is_valid(overflow_bufnr) then
       bufnr = overflow_bufnr
       append = true
     else
-      bufnr = internal.create_buf(nil, kind)
-      state.overflow[kind] = bufnr
+      bufnr = internal.create_buf(nil, msg_kind)
+      state.overflow[msg_kind] = bufnr
       local autocmd_opts = {
         buffer = bufnr,
         once = true,
-        callback = function() state.overflow[kind] = nil end,
+        callback = function() state.overflow[msg_kind] = nil end,
       }
       api.nvim_create_autocmd("BufWipeout", autocmd_opts)
     end
-  elseif is_ephemeral then
+  elseif win_kind == "ephemeral" then
     if state.bufnr and api.nvim_buf_is_valid(state.bufnr) then
       bufnr = state.bufnr
     else
@@ -89,19 +93,27 @@ internal.content_to_buf = function(kind, content, _, append, _, is_ephemeral)
       state.bufnr = bufnr
     end
   else
-    local current_batch_bufnr = state.current_batch[kind]
+    local current_batch_bufnr = state.current_batch[msg_kind]
     if current_batch_bufnr and api.nvim_buf_is_valid(current_batch_bufnr) then
       bufnr = current_batch_bufnr
       append = true
     else
-      bufnr = internal.create_buf(nil, kind)
-      state.current_batch[kind] = bufnr
+      bufnr = internal.create_buf(nil, msg_kind)
+      state.current_batch[msg_kind] = bufnr
     end
     vim.schedule(function()
-      if state.current_batch[kind] then state.current_batch[kind] = nil end
+      if state.current_batch[msg_kind] then state.current_batch[msg_kind] = nil end
     end)
   end
+  return bufnr, append
+end
 
+-- TODO: need to handle message-id semantics...
+-- namely:
+--   - a current message whose id matches incoming message should be replaced by incoming
+--   - should i keep track of message ids across buffer lines like ui2?
+--   - should bufname act as an id? (incoming replace old)
+internal.buf_set_content = function(bufnr, content, append)
   local lines = {}
   local extmarks_to_apply = {}
   local start_col = 0
@@ -159,71 +171,22 @@ internal.content_to_buf = function(kind, content, _, append, _, is_ephemeral)
   return bufnr
 end
 
-internal.get_winid = function(bufnr, title)
-  local winid = nil
-  local showopts = { silent = true }
-  local line_count = api.nvim_buf_line_count(bufnr)
-
-  local is_ephemeral = title == nil
-  local is_overflow = is_ephemeral and view.in_ephemeral()
-  if is_overflow then showopts.winbar_min_tabs = math.huge end
-
-  -- check if bufnr is already in a msgarea window
-  -- this happens is 3 scenarios:
-  --   1) we're in a synchronous block appending a msg kind
-  --   2) we're writing another overflow msg of the same kind
-  --   3) sending a whole buffer as message again
-  for _, data in ipairs(view.state.windows) do
-    if bufnr == data.bufnr then
-      if not data.resized then data.inner_height = line_count end
-      showopts.curwin = data.winid
-      return data.winid, showopts
-    end
-  end
-
-  if is_overflow then
-    title = fn.fnamemodify(api.nvim_buf_get_name(bufnr), ":t")
-    local autocmd_opts = {
-      once = true,
-      group = api.nvim_create_augroup("msgarea.nvim-overflow-" .. tostring(bufnr), { clear = false }),
-      pattern = tostring(view.state.windows.ephemeral.winid),
-      callback = vim.schedule_wrap(function() view.close_safely(winid) end)
-    }
-    api.nvim_create_autocmd("WinClosed", autocmd_opts)
-  end
-
-  local win_cfg = {
-    relative = "msgarea",
-    title = title,
-    height = line_count,
-    style = "minimal",
-    -- NOTE: autocmds sometimes cause trouble when
-    -- messages are opened during unsafe moments
-    noautocmd = true,
-  }
-  winid = api.nvim_open_win(bufnr, false, win_cfg)
-  internal.win_set_wo(winid)
-  if is_overflow then showopts.curwin = winid end
-
-  return winid, showopts
-end
-
-internal.create_buf = function(name, kind)
+internal.create_buf = function(name, msg_kind)
   local bufnr = api.nvim_create_buf(false, true)
   vim.keymap.set("n", "q", function()
     api.nvim_win_close(api.nvim_get_current_win(), true)
   end, { buf = bufnr })
   api.nvim_set_option_value("bufhidden", name and "hide" or "wipe", { buf = bufnr, scope = "local" })
-  name = name or internal.make_uri(bufnr, kind)
+  name = name or internal.make_uri(bufnr, msg_kind)
   api.nvim_buf_set_name(bufnr, name)
   return bufnr
 end
 
-internal.make_uri = function(bufnr, kind)
-  return "msgarea://" .. bufnr .. "/" .. kind
+internal.make_uri = function(bufnr, msg_kind)
+  return "msgarea://" .. bufnr .. "/" .. msg_kind
 end
 
-internal.win_set_wo = function(win)
+internal.win_set_options = function(win)
   -- i just copied most of the wo settings from ui2
   vim._with({ win = win, noautocmd = true }, function()
     api.nvim_set_option_value("wrap", true, { scope = "local" })
