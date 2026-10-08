@@ -691,6 +691,14 @@ internal.on_win_resize = function()
     if win_was_resized then
       local winbar_h = api.nvim_get_option_value("winbar", { win = winid, scope = "local" }) == "" and 0 or 1
       local inner_height = height - winbar_h
+      -- HACK: the idea here is that I want to clamp ephemeral height when it's resized
+      -- by things like Neogit, BUT I don't want to clamp it when you resize the window
+      -- your mouse by holding the statusline. This seems to be a way you can distinguish the two.
+      local resized_with_mouse_drag = height + data.border_height == vim.o.cmdheight
+      if data.kind == "ephemeral" and not resized_with_mouse_drag then
+        local max_eph_height = internal.view_resolve_max_height(util.cmd_height()) - data.border_height
+        inner_height = internal.clamp_height(inner_height, nil, max_eph_height)
+      end
       data.inner_height = inner_height
       data.resized = true
       needs_refresh = true
