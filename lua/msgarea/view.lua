@@ -171,10 +171,9 @@ M.show = function(opts)
   end
 
   local key_of_curwin = opts.curwin and internal.win_get_key(opts.curwin)
-  local state_curwin_key = internal.win_get_key(state.curwin)
   if key_of_curwin and key_of_curwin ~= "ephemeral" then
     state.curwin = opts.curwin
-  elseif type(state_curwin_key) ~= "number" then
+  elseif type(internal.win_get_key(state.curwin)) ~= "number" then
     -- NOTE: this case occurs when focus needs to return to a window not in history...
     -- can increase buffer size or maybe think of a better idea than ring buffer
     state.curwin = state.windows[1] and state.windows[1].winid
@@ -590,9 +589,10 @@ internal.win_get_key = function(winid)
   for i, win in ipairs(state.windows) do
     if win.winid == winid then return i end
   end
-  if (state.windows.ephemeral or {}).winid == winid then
+  if state.windows.ephemeral and state.windows.ephemeral.winid == winid then
     return "ephemeral"
   end
+  return nil
 end
 
 internal.win_valid = function(winid)
@@ -657,8 +657,8 @@ internal.on_win_closed = function(_, winid)
   local k = internal.win_get_key(winid)
   if k == nil then return end
   if k == "ephemeral" then
-    local overflow_winid = internal.overflow_stack_pop_win()
-    local overflow_key = internal.win_get_key(overflow_winid)
+    local overflow_winid = fn.mode() ~= "c" and internal.overflow_stack_pop_win()
+    local overflow_key = overflow_winid and internal.win_get_key(overflow_winid)
     local overflow_data = overflow_key
       and type(overflow_key) == "number"
       and table.remove(state.windows, overflow_key)
