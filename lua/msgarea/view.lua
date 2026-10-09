@@ -85,7 +85,7 @@ M._open_win = function(buf, enter, opts, win_kind, reuse_win)
     kind = win_kind,
   }
 
-  util.cmd_clear()
+  if fn.mode() ~= "c" then util.cmd_clear() end
   M.render({ curwin = win_kind ~= "ephemeral" and winid or nil })
   return winid
 end

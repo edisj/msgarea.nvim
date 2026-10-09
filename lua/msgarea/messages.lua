@@ -42,6 +42,9 @@ M.show_msg = function(tgt, kind, content, replace_last, append, id)
   local message_title = config.get().message_title
   local title = type(message_title) == "string" and message_title or message_title(kind)
   local win_kind = view.win_resolve_kind(nil, title)
+  if win_kind == "ephemeral" and view.ephemeral_is_focused() then
+    win_kind = "overflow"
+  end
   local bufnr, set_wo
   if type(content) == "number" and api.nvim_buf_is_valid(content) then
     -- content is ready-to-go buffer so just show it as is
