@@ -16,8 +16,8 @@ local M = {
     hold_resize = false, ---@type boolean
     hold_swap = false, ---@type boolean
     overflow_stack = {}, ---@type integer[]
-    refresh_opts = {}, ---@type msgarea.view.ShowOpts
-    refresh_pending = false, ---@type boolean
+    render_opts = {}, ---@type msgarea.view.RenderOpts
+    render_pending = false, ---@type boolean
   }
 }
 setmetatable(M.state, {
@@ -66,7 +66,7 @@ M._open_win = function(buf, enter, opts, win_kind, reuse_win)
   end
 
   -- The key idea here is that every window is opened as a hidden float,
-  -- where the cmdheight and which window is shown is handled in `M.show()`
+  -- where the cmdheight and which window is shown is handled in `M.render()`
   local win_config = internal.initial_win_config(buf, opts)
   local winid = orig.nvim_open_win(buf, enter, win_config)
   if winid == WIN_ERROR then return WIN_ERROR end
@@ -86,7 +86,7 @@ M._open_win = function(buf, enter, opts, win_kind, reuse_win)
   }
 
   util.cmd_clear()
-  M.show({ silent = true, curwin = win_kind ~= "ephemeral" and winid or nil })
+  M.render({ curwin = win_kind ~= "ephemeral" and winid or nil })
   return winid
 end
 
@@ -121,43 +121,34 @@ M._win_set_config = function(win, win_config, win_kind)
   end
 
   orig.nvim_win_set_config(win, win_config)
-  M.show({ silent = true, curwin = win_kind ~= "ephemeral" and win or nil })
+  M.render({ curwin = win_kind ~= "ephemeral" and win or nil })
 end
 
-local redraw_if_needed = function()
-  if
-    fn.mode() == "c"
-    ---@diagnostic disable-next-line: undefined-field
-    or (_G.MiniPick and _G.MiniPick.is_picker_active())
-  then
-    api.nvim__redraw({ flush = true })
-  end
-end
-
-local schedule_refresh = function(opts)
+local schedule_render = function(opts)
   local state = M.state
-  state.refresh_pending, state.refresh_opts = true, opts
+  state.render_pending = true
+  state.render_opts = opts
   vim.schedule(function()
-    if not state.refresh_pending then return end
-    state.refresh_opts.flush = true
-    M.show(state.refresh_opts)
+    if not state.render_pending then return end
+    state.render_opts.flush = true
+    M.render(state.render_opts)
   end)
 end
 
----@param opts? msgarea.view.ShowOpts
-M.show = function(opts)
+---@param opts? msgarea.view.RenderOpts
+M.render = function(opts)
   local state = M.state
 
-  opts = vim.tbl_deep_extend("force", state.refresh_opts, opts or {})
+  opts = vim.tbl_deep_extend("force", { silent = true }, state.render_opts, opts or {})
   if not opts.flush then
-    schedule_refresh(opts)
+    schedule_render(opts)
     return
   end
 
   -- NOTE: need to make sure these get cleared before
   -- the potential early return
-  state.refresh_pending = false
-  state.refresh_opts = {}
+  state.render_pending = false
+  state.render_opts = {}
 
   for i = #state.windows, 1, -1 do
     if not api.nvim_win_is_valid(state.windows[i].winid) then
@@ -166,7 +157,7 @@ M.show = function(opts)
   end
 
   if vim.tbl_isempty(state.windows) then
-    if not opts.silent then util.warn("no active windows") end -- TODO: do i need silent?
+    if not opts.silent then util.warn("no active windows") end
     if fn.mode() ~= "c" then internal.set_cmdheight(M.original_cmdheight) end
     state.height = nil
     return
@@ -242,7 +233,7 @@ M.show = function(opts)
     vim.wo[winid].winbar = data.kind ~= "ephemeral" and data.title and N_active >= min_tabs and WINBAR_STR or ""
   end
 
-  redraw_if_needed()
+  internal.nvim_redraw_if_needed()
 end
 
 M.close_all = function()
@@ -272,8 +263,8 @@ M.hide = function(opts)
   local state = M.state
   if vim.tbl_isempty(state.windows) then return end
 
-  state.refresh_pending = false
-  state.refresh_opts = {}
+  state.render_pending = false
+  state.render_opts = {}
   util.msg_clear()
 
   -- TODO: revisit this line after
@@ -430,6 +421,18 @@ internal.ensure_title = function(data)
   local name = fn.fnamemodify(api.nvim_buf_get_name(data.bufnr), ":t")
   data.title = (" %s "):format(name)
 end
+
+
+internal.nvim_redraw_if_needed = function()
+  if
+    fn.mode() == "c"
+    ---@diagnostic disable-next-line: undefined-field
+    or (_G.MiniPick and _G.MiniPick.is_picker_active())
+  then
+    api.nvim__redraw({ flush = true })
+  end
+end
+
 
 internal.overflow_stack_push_win = function(winid)
   -- NOTE: remove existing stack entry with same winid
@@ -662,7 +665,7 @@ internal.on_win_closed = function(_, winid)
   -- FIXME: special case to prevent showing when closing ephemeral
   -- to enter pager. Need to think of a better solution
   if api.nvim_get_current_win() ~= ui2.wins.pager then
-    M.show({ flush = true, silent = true, curwin = curwin })
+    M.render({ flush = true, curwin = curwin })
   end
 end
 
@@ -690,7 +693,7 @@ internal.on_win_resize = function()
       needs_refresh = true
     end
   end
-  if needs_refresh then M.show({ flush = true, silent = true }) end
+  if needs_refresh then M.render({ flush = true }) end
 end
 
 internal.on_cursor_moved = function(_, winid)
@@ -777,7 +780,7 @@ end
 ---@field resized? boolean
 ---@field border any[]|"none"|"single"|"double"|"rounded"|"solid"|"shadow"
 
----@class (exact) msgarea.view.ShowOpts
+---@class (exact) msgarea.view.RenderOpts
 ---@field silent? boolean suppress warning msg (default false)
 ---@field flush? boolean (default false)
 ---@field curwin? integer curwin winid override

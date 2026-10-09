@@ -2,7 +2,7 @@ local M = {}
 
 ---Show or refresh the msgarea view.
 M.show = function()
-  require("msgarea.view").show()
+  require("msgarea.view").render({ silent = false })
 end
 
 ---Hide, but do not close, all msgarea windows.

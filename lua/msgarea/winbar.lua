@@ -36,7 +36,7 @@ M.on_click = function(minwid, _, button, _)
   -- not the clicked window
   local winid = minwid
   if button == "l" then
-    view.show({ flush = true, silent = true, curwin = winid })
+    view.render({ flush = true, curwin = winid })
   elseif button == "r" then
     vim.api.nvim_win_close(winid, true)
   end

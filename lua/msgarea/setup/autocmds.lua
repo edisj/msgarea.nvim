@@ -19,7 +19,7 @@ local save_ephemeral_state = function()
   end
   local curwin = eph.winid
   saved_ephemeral_state = { winid = curwin, prev_curwin = view.state.curwin }
-  view.show({ silent = true, cmdheight = 1 })
+  view.render({ cmdheight = 1 })
   view._win_set_config(curwin, { relative = "msgarea" }, "overflow")
   return curwin
 end
@@ -54,7 +54,7 @@ local autocmds = {
           -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
           if ev.match == "-" and ui2.cmd.prompt then return end
           if fn.mode() ~= "c" then skip_refresh = true; return end
-          view.show({ silent = true, cmdheight = 1, curwin = curwin })
+          view.render({ cmdheight = 1, curwin = curwin })
         end)
       end
     end,
@@ -70,7 +70,7 @@ local autocmds = {
           callback = function()
             messages.msg_expanded = false
             if not (api.nvim_get_current_win() == ui2.wins.pager) then
-              view.show({ silent = true })
+              view.render()
             end
           end
         }
@@ -80,7 +80,7 @@ local autocmds = {
           if ui2.cmd.prompt or (api.nvim_get_current_win() == ui2.wins.pager) then return end
           if skip_refresh then skip_refresh = false; return end
           local curwin = restore_ephemeral_state()
-          view.show({ silent = true, curwin = curwin })
+          view.render({ curwin = curwin })
           vim.schedule(function() view.state.hold_resize = false end)
         end)
       end
@@ -107,7 +107,7 @@ local autocmds = {
       then
         return
       end
-      view.show({ silent = true, curwin = winid })
+      view.render({ curwin = winid })
     end,
   },
   {
@@ -115,7 +115,7 @@ local autocmds = {
     desc = "refresh mesgarea when leaving pager",
     pattern = "*",
     cb = function(ev)
-      if ev.buf == ui2.bufs.pager then view.show({ silent = true }) end
+      if ev.buf == ui2.bufs.pager then view.render() end
     end,
   },
   {
