@@ -7,41 +7,29 @@ local M = {}
 
 local skip_refresh = false
 
----@type { data: msgarea.view.WinData, idx: integer, prev_curwin: integer? }?
+---@type { winid: integer, prev_curwin: integer? }?
 local saved_ephemeral_state = nil
 
--- TODO: this should be done using view.win_set_config(...) instead
 local save_ephemeral_state = function()
   local eph = view.state.windows.ephemeral
   if not eph then return end
-
   if api.nvim_get_current_win() ~= eph.winid then
     view.ephemeral_close(1)
     return
   end
-
-  local data = eph
-  local idx = #view.state.windows + 1
-  local prev_curwin = view.state.curwin
-  saved_ephemeral_state = { data = data, idx = idx, prev_curwin = prev_curwin }
-  view.state.windows[idx] = eph
-  view.state.windows.ephemeral = nil
-
-  local curwin = data.winid
-  local height = data.inner_height + data.border_height
-  return curwin, height
+  local curwin = eph.winid
+  saved_ephemeral_state = { winid = curwin, prev_curwin = view.state.curwin }
+  view.show({ silent = true, cmdheight = 1 })
+  view._win_set_config(curwin, { relative = "msgarea" }, "overflow")
+  return curwin
 end
 
 local restore_ephemeral_state = function()
   if not saved_ephemeral_state then return end
-
   local curwin = saved_ephemeral_state.prev_curwin
-  table.remove(view.state.windows, saved_ephemeral_state.idx)
-  if api.nvim_win_is_valid(saved_ephemeral_state.data.winid) then
-    view.state.windows.ephemeral = saved_ephemeral_state.data
-  end
+  local winid = saved_ephemeral_state.winid
   saved_ephemeral_state = nil
-
+  view._win_set_config(winid, { relative = "msgarea" }, "ephemeral")
   return curwin
 end
 
@@ -56,7 +44,7 @@ local autocmds = {
       if ev.match == "-" then
         view.hide({ cmdheight = view.original_cmdheight })
       else
-        local curwin, height = save_ephemeral_state()
+        local curwin = save_ephemeral_state()
         vim.schedule(function()
           -- NOTE: this check is still needed even though we filter out the
           -- "@" and "-" patterns because here we're scheduling the refresh.
@@ -66,7 +54,7 @@ local autocmds = {
           -- scheduled refresh is still queued, so you get buggy dialog visual artifacts.
           if ev.match == "-" and ui2.cmd.prompt then return end
           if fn.mode() ~= "c" then skip_refresh = true; return end
-          view.show({ silent = true, cmdheight = 1, curwin = curwin, height = nil })
+          view.show({ silent = true, cmdheight = 1, curwin = curwin })
         end)
       end
     end,
@@ -177,16 +165,16 @@ local autocmds = {
   },
 }
 
-local id -- augroup id
+local augroup_id
 M.setup = function(config)
   if not config.enable then
-    pcall(api.nvim_del_augroup_by_id, id)
+    pcall(api.nvim_del_augroup_by_id, augroup_id)
     return
   end
-  id = vim.api.nvim_create_augroup("msgarea.autocmds", { clear = true })
+  augroup_id = vim.api.nvim_create_augroup("msgarea.autocmds", { clear = true })
   for _, autocmd in ipairs(autocmds) do
     local autocmd_opts = {
-      group = id,
+      group = augroup_id,
       desc = "(msgarea.nvim) " .. autocmd.desc,
       pattern = autocmd.pattern,
       nested = autocmd.nested,

@@ -49,14 +49,19 @@ M.open_win = function(buf, enter, opts)
   return M._open_win(buf, enter, opts, win_kind, false)
 end
 
+M.win_set_config = function(win, win_config)
+  assert(win_config.relative == "msgarea")
+  local win_kind = M.win_resolve_kind(win, win_config.title)
+  M._win_set_config(win, win_config, win_kind)
+end
+
 M._open_win = function(buf, enter, opts, win_kind, reuse_win)
   if reuse_win then
-    for _, data in ipairs(M.state.windows) do
-      if buf == data.bufnr then
-        M.win_set_config(data.winid, opts)
-        if enter then api.nvim_set_current_win(data.winid) end
-        return data.winid
-      end
+    local data = M.buf_get_data(buf)
+    if data then
+      M._win_set_config(data.winid, opts, win_kind)
+      if enter then api.nvim_set_current_win(data.winid) end
+      return data.winid
     end
   end
 
@@ -85,17 +90,14 @@ M._open_win = function(buf, enter, opts, win_kind, reuse_win)
   return winid
 end
 
----monkey-patched nvim_win_set_config
-M.win_set_config = function(win, win_config)
+M._win_set_config = function(win, win_config, win_kind)
   if not internal.win_valid(win) then return end
-  assert(win_config.relative == "msgarea")
 
   local title = win_config.title
   local bufnr = api.nvim_win_get_buf(win)
   win_config = internal.initial_win_config(bufnr, win_config)
   win_config.noautocmd = nil
 
-  local new_kind = M.win_resolve_kind(win, title)
   local cur_key = internal.win_get_key(win)
   if cur_key == nil then -- means this is a new window not already in state
     internal.state_append_data {
@@ -103,23 +105,23 @@ M.win_set_config = function(win, win_config)
       winid = win,
       title = title,
       win_cfg = win_config,
-      kind = new_kind,
+      kind = win_kind,
     }
   else
     local is_ephemeral = cur_key == "ephemeral"
-    local want_ephemeral = new_kind == "ephemeral"
-    local needs_swap = is_ephemeral ~= want_ephemeral
-    if needs_swap then M.win_swap_kind(win) end
+    local want_ephemeral = win_kind == "ephemeral"
+    local needs_shuffle = is_ephemeral ~= want_ephemeral
+    if needs_shuffle then internal.state_shuffle_win(win, want_ephemeral) end
     internal.state_update_data {
       winid = win,
       title = title,
       win_cfg = win_config,
-      kind = new_kind,
+      kind = win_kind,
     }
   end
 
   orig.nvim_win_set_config(win, win_config)
-  M.show({ silent = true, curwin = new_kind ~= "ephemeral" and win or nil })
+  M.show({ silent = true, curwin = win_kind ~= "ephemeral" and win or nil })
 end
 
 local redraw_if_needed = function()
@@ -237,7 +239,6 @@ M.show = function(opts)
     -- WinResized, can check if window height has been changed. Must be after
     -- set_cmdheight, because heights can change when splits resized too to overflow
     if ok then data.actual_height = win_cfg.height end
-    -- vim.wo[winid].winbar = data.title and N_active >= min_tabs and WINBAR_STR or ""
     vim.wo[winid].winbar = data.kind ~= "ephemeral" and data.title and N_active >= min_tabs and WINBAR_STR or ""
   end
 
@@ -324,51 +325,20 @@ M.win_resolve_kind = function(winid, title)
 end
 
 ---@param winid integer
----@return msgarea.view.WinData
+---@return msgarea.view.WinData?
 M.win_get_data = function(winid)
   local key = internal.win_get_key(winid)
   return M.state.windows[key]
 end
 
----@param winid integer
-M.win_swap_kind = function(winid)
-  local cur_key = internal.win_get_key(winid)
-  if cur_key == nil then return end
-
-  local state = M.state
-  local data = state.windows[cur_key]
-  local kind = data.kind
-  local new_kind
-  if kind == "ephemeral" then     -- ephemeral -> persistent
-    new_kind = "persistent"
-    local new_key = #state.windows + 1
-    state.windows[new_key] = state.windows[cur_key]
-    state.windows[cur_key] = nil
-  else
-    local is_overflow = M.ephemeral_is_focused()
-    if is_overflow then           -- persistent/overflow -> overflow
-      new_kind = "overflow"
-      internal.overflow_stack_push_win(winid)
-    else                          -- persistent -> ephemeral
-      assert(type(cur_key) == "number")
-      new_kind = "ephemeral"
-      -- HACK: a bit of adhoc hack here with hold_swap..
-      -- need to think of something better at some point,
-      -- but the IDEA is that ephemeral_close() can potentially
-      -- invoke the WinClosed autocmd, which can in turn potentially
-      -- cause a queued overflow window to shift to ephemeral position,
-      -- which invalidates cur_key on the next line...
-      state.hold_swap = true
-      M.ephemeral_close()
-      state.hold_swap = false
-      local windata = table.remove(state.windows, cur_key)
-      state.windows[new_kind] = windata
-      internal.overflow_stack_remove_win(winid)
-    end
+---@param bufnr integer
+---@return msgarea.view.WinData?
+M.buf_get_data = function(bufnr)
+  local eph = M.state.windows.ephemeral
+  if eph and eph.bufnr == bufnr then return eph end
+  for _, data in ipairs(M.state.windows) do
+    if bufnr == data.bufnr then return data end
   end
-
-  internal.state_update_data { winid = winid, kind = new_kind }
-  M.show()
 end
 
 ---@param winid integer
@@ -435,6 +405,22 @@ internal.state_update_data = function(new_data)
     if not data.resized then data.inner_height = new_data.win_cfg.height end
   end
   if data.kind == "overflow" then internal.ensure_title(data) end
+end
+
+internal.state_shuffle_win = function(winid, to_ephemeral)
+  local state = M.state
+  local cur_key = internal.win_get_key(winid)
+  if to_ephemeral then
+    assert(type(cur_key) == "number")
+    state.hold_swap = true
+    M.ephemeral_close()
+    state.hold_swap = false
+    state.windows.ephemeral = table.remove(state.windows, cur_key)
+  else
+    assert(cur_key == "ephemeral")
+    state.windows[#state.windows + 1] = state.windows.ephemeral
+    state.windows.ephemeral = nil
+  end
 end
 
 internal.ensure_title = function(data)
